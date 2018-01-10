@@ -29,6 +29,8 @@ To solve the above problems, a mechanism to prevent the inclusion of a transacti
 
 The use of input expiration may incentivize miners to include expiring transactions of above similar fee rate transactions which do not expire. This incentive seems to be consistent with the health of the ecosystem, and gives users an additional way to communicate the priority of their transactions, albeit with the gamble that they may not be mined before they expire.
 
+This BIP may incentivize wallets to play transaction expiration fee roulette by re-sending the same transaction with a 1-block expiration after each block is mined ([https://www.reddit.com/r/BitcoinSerious/comments/7p5ag2/network_susceptibility_to_replay_spam/dsffxoa/ Reddit comment]). If this is a concern, node software can choose to limit the propagation of such retransmissions by holding them in the mempool after they have expired for as long as the node desires, or otherwise caching an input invalidation list in the case of abuse. The authors have not fully analyzed the game theoretical implications of this type of behavior.
+
 ==Specification==
 
 This specification is based on the relative time-lock mechanism introduced in [https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki BIP68].
