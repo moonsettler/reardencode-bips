@@ -1,0 +1,62 @@
+<pre>
+  BIP: zzz
+  Layer: Applications
+  Title: reverse locktime
+  Author: Dan Bryant <dkbryant@gmail.com>
+  Comments-Summary: No comments yet.
+  Comments-URI: https://github.com/brianddk/bips/wiki/Comments:BIP-0zzz
+  Status: Draft
+  Type: Standards Track
+  Created: 2017-01-09
+</pre>
+
+==Abstract==
+
+The purpose of this BIP is to allow a sender to signal thier intent that a TXN be expired by any miners / nodes that participate in this enhancement.
+
+==Motivation==
+
+Reasons to allow senders to signal expiration:
+
+# Provides guidance for miners and nodes as to which transactions could be flushed early.
+# Provides a standardized way for wallets to zap transactions and allow UTXOs to be respent.
+
+==Specification==
+
+The following workflow will discribe the basic implementation.
+
+===Reverse Locktime===
+
+If lock_time <= current_block and tx_in.seq < 0xffffffff for all tx_in then the TXN is a reverse lock.
+
+The TXN should be confirmed as soon as economical, but ejected from the mempool after block lock_time + n. Where n is defined as:
+
+ n = min(n, tx_in[i].seq); // for all i
+
+So a typical implementation would look as follows. Assume the current block height is 524188.  The sender wants to signal that the TXN should be flushed from the mempool after block 524288 (100 blocks)
+
+ tx.lock_time = 1;
+ ...
+ tx.tx_in[0].seq = 0x7ffff // 524288 - 1 /*tx.lock_time*/;
+ ...
+ tx.tx_in[i].seq = 0x7ffff // 524288 - 1 /*tx.lock_time*/;
+
+==Backward compatibility==
+
+This should be 100% backwards compatible, since older systems seeing this as an nLockTime TXN would lock it until block 1, which happened back in 2009. So it would effectively be just a normal TXN.
+
+==Future Work==
+
+Upon review, this BIP should likely have two phases.  One is a voluntary phase where nodes and miners may choose to honor or ignore these rules.  The second phase would need to be implemented as a concensous softfork.  This concenseous softfork would introduce a new OP code OP_TBD replacing OP_NOP4.  This OP would mark TXNs as invalid after the expiration time described above.  This would make adhering to these rules manditory and predictable.
+
+Further work is needed to revise this BIP to make it as close to BIP65/68/112/113 as possible.  If done right, we would only need to intruduce a single bit in the sequence scheme and of course the OP code.
+
+Ref: https://blog.bitmex.com/bitcoins-consensus-forks/
+
+==Implementation==
+
+TBD
+
+==Credit==
+
+Thanks to [https://github.com/reardencode/ reardencode] for contributions and corrections.
