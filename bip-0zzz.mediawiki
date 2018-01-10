@@ -35,7 +35,7 @@ This specification is based on the relative time-lock mechanism introduced in [h
 
 If sequence bit (1 << 30) is set then no consensus meaning is applied to the sequence number, and no additional restriction is applied to the input.
 
-If sequence bit (1 << 31) is not set then BIP68 is followed and this BIP applies on additional restriction to the input.
+If sequence bit (1 << 31) is not set then BIP68 is followed and this BIP applies no additional restriction to the input.
 
 If sequence bit (1 << 31) is set, and bit (1 << 30) is not set then the sequence number is interpreted as an input expiration, and the transaction MUST NOT be mined after the specified time.
 
