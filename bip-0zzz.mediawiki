@@ -1,8 +1,9 @@
 <pre>
   BIP: zzz
-  Layer: Applications
-  Title: reverse locktime
+  Layer: Consensus (soft fork)
+  Title: Input expiration using consensus enforced sequence numbers
   Author: Dan Bryant <dkbryant@gmail.com>
+          Brandon Smith <freedom@reardencode.com>
   Comments-Summary: No comments yet.
   Comments-URI: https://github.com/brianddk/bips/wiki/Comments:BIP-0zzz
   Status: Draft
@@ -12,51 +13,84 @@
 
 ==Abstract==
 
-The purpose of this BIP is to allow a sender to signal thier intent that a TXN be expired by any miners / nodes that participate in this enhancement.
+This BIP introduces input expiration consensus-enforced semantics of the sequence number field to enable a signed transaction input to remain valid for a defined period of time after confirmation of its corresponding output, or the transaction nLockTime.
 
 ==Motivation==
 
-Reasons to allow senders to signal expiration:
+The current mempool expiration function does function properly under current network conditions. Uncomfirmed transactions persist in the global mempool far beyond the intended expiration period and are regularly repropagated as the network topology changes. This situation leads to significant uncertainty for users of Bitcoin in terms of when their transactions will be confirmed, or definitively cancelled. This situation is mitigated if transactions are sent with RBF, and can be replaced with an alternative higher fee transaction consuming the same input, but in practice few wallets fully support the required behaviors.
 
-# Provides guidance for miners and nodes as to which transactions could be flushed early.
-# Provides a standardized way for wallets to zap transactions and allow UTXOs to be respent.
+Additionally, the current uncertainty of confirmation time (even within the intended mempool expiration time) makes it difficult for payment requesters offering a time-limited exchange rate lock to their payers to offer a good user experience. If a payer initiates a payment in a timely manner, but pays fee that results the transaction confirming after the exchange rate lock expires; the payee must issue a refunding transaction, leading to significant unnecessary spend on fees, and block space waste.
+
+Finally, network and node memory resources are currently wasted storing and repropagating transactions which may never confirm.
+
+To solve the above problems, a mechanism to prevent the inclusion of a transaction _after_ a certain date is specified.
+
+==Incentives==
+
+The use of input expiration may incentivize miners to include expiring transactions of above similar fee rate transactions which do not expire. This incentive seems to be consistent with the health of the ecosystem, and gives users an additional way to communicate the priority of their transactions, albeit with the gamble that they may not be mined before they expire.
 
 ==Specification==
 
-The following workflow will discribe the basic implementation.
+This specification is based on the relative time-lock mechanism introduced in [https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki BIP68].
 
-===Reverse Locktime===
+If sequence bit (1 << 30) is set then no consensus meaning is applied to the sequence number, and no additional restriction is applied to the input.
 
-If lock_time <= current_block and tx_in.seq < 0xffffffff for all tx_in then the TXN is a reverse lock.
+If sequence bit (1 << 31) is not set then BIP68 is followed and this BIP applies on additional restriction to the input.
 
-The TXN should be confirmed as soon as economical, but ejected from the mempool after block lock_time + n. Where n is defined as:
+If sequence bit (1 << 31) is set, and bit (1 << 30) is not set then the sequence number is interpreted as an input expiration, and the transaction MUST NOT be mined after the specified time.
 
- n = min(n, tx_in[i].seq); // for all i
+The input expiration value `n` is derived from the sequence by applying the mask 0x0000ffff.  A value of `n == 0` means the transaction can never be mined, and SHOULD NOT be used.
 
-So a typical implementation would look as follows. Assume the current block height is 524188.  The sender wants to signal that the TXN should be flushed from the mempool after block 524288 (100 blocks)
+===`time_base`===
 
- tx.lock_time = 1;
- ...
- tx.tx_in[0].seq = 0x7ffff // 524288 - 1 /*tx.lock_time*/;
- ...
- tx.tx_in[i].seq = 0x7ffff // 524288 - 1 /*tx.lock_time*/;
+If bit (1 << 29) is set, `time_base` is `nLockTime` and represents an MTP ([https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki BIP113]) or a block height as specified for `nLockTime`.
 
-==Backward compatibility==
+If bit (1 << 29) is not set:
+ * If bit (1 << 28) is set, `time_base` is the MTP of the block in which the output was mined.
+ * If bit (1 << 28) is not set, `time_base` is the block height at which the output was mined.
 
-This should be 100% backwards compatible, since older systems seeing this as an nLockTime TXN would lock it until block 1, which happened back in 2009. So it would effectively be just a normal TXN.
+===Validation===
+
+For MTP `time_base` values, the input is not valid when the previous block's MTP is greater than or equal to `512 * n + time_base`.
+
+For block height `time_base` values, the input is not valid when the previous block's height is greater than or equal to `n + time_base`.
+
+===Limitations===
+
+Approximately 1 year of time or block heights can be specified under this BIP, for `nLockTime` relative expiration this allows significant flexibility in specifying the validity window for transactions, but for output relative expiration, this could potentially make it impossible to use this feature with older inputs. If use cases demand greater flexibility, more bits could be allocated for specifying `n` (if all bits are used, approximately 5000 years of range are available) at the cost of other flexibility.
+
+==Deployment==
+
+This BIP will be deployed by "versionbits" [https://github.com/bitcoin/bips/blob/master/bip-0009.mediawiki BIP9] using bit TBD.
+
+For Bitcoin '''mainnet''', the BIP9 '''starttime''' will be TBD and BIP9 '''timeout''' will be TBD.
+
+For Bitcoin '''testnet''', the BIP9 '''starttime''' will be TBD and BIP9 '''timeout''' will be TBD.
+
+==Compatibility==
+
+All transactions specifying input expiration will also signal full-RBF. This is also true for transactions using relative lock-time, but has slightly stronger implications here, since the transaction is eligible for mining when it is initially published.
+
+Existing software will treat transactions specifying input expiration as valid full-RBF transactions, ensuring soft-fork semantics. Once this BIP activates, transactions with sequence numbers having bit (1 << 31) set and bit (1 << 30) not set which would have been valid before activation may not be accepted by the network.
+
+Bits (1 << 16) through (1 << 27) inclusive are avaliable to expand the range of possible input expirations, or for other flags. 
+
+If bits (1 << 30) and (1 << 31) are set, the remainder of the sequence bits have no consensus meaning, and may be used for further enhancements.
 
 ==Future Work==
 
-Upon review, this BIP should likely have two phases.  One is a voluntary phase where nodes and miners may choose to honor or ignore these rules.  The second phase would need to be implemented as a concensous softfork.  This concenseous softfork would introduce a new OP code OP_TBD replacing OP_NOP4.  This OP would mark TXNs as invalid after the expiration time described above.  This would make adhering to these rules manditory and predictable.
-
-Further work is needed to revise this BIP to make it as close to BIP65/68/112/113 as possible.  If done right, we would only need to intruduce a single bit in the sequence scheme and of course the OP code.
-
-Ref: https://blog.bitmex.com/bitcoins-consensus-forks/
+Transaction deadlines, which could be translated into input expiration values, SHOULD be added to [https://github.com/bitcoin/bips/blob/master/bip-0021.mediawiki BIP21] payment request URLs. This would allow payment processors, and payees to communicate to wallets how long they have to get their transaction mined, and enable the wallets to select an appropriate fee/expiration combination. Further, by specifying the expiration, no refund transaction will be required in the event that the exchange rate lock expires before the transaction can be confirmed.
 
 ==Implementation==
 
 TBD
 
-==Credit==
+==References==
 
-Thanks to [https://github.com/reardencode/ reardencode] for contributions and corrections.
+BIP9: https://github.com/bitcoin/bips/blob/master/bip-0009.mediawiki
+
+BIP21: https://github.com/bitcoin/bips/blob/master/bip-00021.mediawiki
+
+BIP68: https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki
+
+BIP113: https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki
