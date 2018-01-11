@@ -83,6 +83,8 @@ If bits <code>(1 << 30)</code> and <code>(1 << 31)</code> are set, the remainder
 
 Transaction deadlines, which could be translated into input expiration values, SHOULD be added to [https://github.com/bitcoin/bips/blob/master/bip-0021.mediawiki BIP21] payment request URLs. This would allow payment processors, and payees to communicate to wallets how long they have to get their transaction mined, and enable the wallets to select an appropriate fee/expiration combination. Further, by specifying the expiration, no refund transaction will be required in the event that the exchange rate lock expires before the transaction can be confirmed.
 
+It may be interesting to add an OPCODE to allow outputs that are spendable by Alice until time foo, always spendable by Bob, and spendable by Joe only after time bar, or other such cases.
+
 ==Implementation==
 
 TBD
