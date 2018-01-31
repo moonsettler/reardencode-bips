@@ -45,7 +45,7 @@ The input expiration value <code>n</code> is derived from the sequence by applyi
 
 ===<code>time_base</code>===
 
-If bit <code>(1 << 29)</code> is set, <code>time_base</code> is <code>nLockTime<code> and represents an MTP ([https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki BIP113]) or a block height as specified for <code>nLockTime</code>.
+If bit <code>(1 << 29)</code> is set, <code>time_base</code> is <code>nLockTime</code> and represents an MTP ([https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki BIP113]) or a block height as specified for <code>nLockTime</code>.
 
 If bit <code>(1 << 29)</code> is not set:
 * If bit <code>(1 << 28)</code> is set, <code>time_base</code> is the MTP of the block in which the output was mined.
