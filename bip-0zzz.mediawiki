@@ -59,7 +59,7 @@ For block height <code>time_base</code> values, the input is not valid when the 
 
 ===Limitations===
 
-Approximately 1 year of time or block heights can be specified under this BIP, for <code>nLockTime</code> relative expiration this allows significant flexibility in specifying the validity window for transactions, but for output relative expiration, this could potentially make it impossible to use this feature with older inputs. If use cases demand greater flexibility, more bits could be allocated for specifying <code>n</code> (if all bits are used, approximately 5000 years of range are available) at the cost of other flexibility.
+Approximately 1 year of time or block heights can be specified under this BIP, for <code>nLockTime</code> relative expiration this allows significant flexibility in specifying the validity window for transactions, but for output relative expiration, this could potentially make it impossible to use this feature with older inputs. If use cases demand greater flexibility, more bits could be allocated for specifying <code>n</code> (if all bits are used, approximately 5000 years of range are available) at the cost of other flexibility. Alternatively, an additional bit could be used to adjust the interpretation of the existing <code>n</code> value, eg. by multiplying it by 128 if bit <code>(1 << 27)</code> is set, which would reduce granularity, but increase range.
 
 ==Deployment==
 
