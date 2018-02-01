@@ -15,6 +15,12 @@
 
 This BIP introduces input expiration consensus-enforced semantics of the sequence number field to enable a signed transaction input to remain valid for a defined period of time after confirmation of its corresponding output, or the transaction nLockTime.
 
+==Nail In The Coffin==
+
+Thanks to @arubi on Freenode, I now understand that any kind of input expiration requires that all wallets in the ecosystem upgrade to understand the implications (ie. that 0-conf expiring transactions may become invalid). Unless this hurdle can be overcome, any soft fork expiration proposal is untennable.
+
+So far I havne't been able to come up with even a theoretical way to overcome this problem, but if it were possible to make UTXOs using expiration appear invalid to old software while in the mempool, but valid once mined, that might reopen this as a possibility.
+
 ==Temporary Discussion==
 
 Traditional objections to proposals like this fall along the lines of breaking monotonicity of transaction chains (ie. transaction once valid, must remain valid, allowing valid chains of transactions to be built in the face of blockchain reorganizations). In order to avoid breaking that important property of Bitcoin, this proposal must be modified.
