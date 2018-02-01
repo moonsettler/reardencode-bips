@@ -15,6 +15,22 @@
 
 This BIP introduces input expiration consensus-enforced semantics of the sequence number field to enable a signed transaction input to remain valid for a defined period of time after confirmation of its corresponding output, or the transaction nLockTime.
 
+==Temporary Discussion==
+
+Traditional objections to proposals like this fall along the lines of breaking monotonicity of transaction chains (ie. transaction once valid, must remain valid, allowing valid chains of transactions to be built in the face of blockchain reorganizations). In order to avoid breaking that important property of Bitcoin, this proposal must be modified.
+
+Currently coinbase transactions break this property, because in the face of a reorg, they can become invalid. The solution to this is to require that they mature for 100 blocks before being spent.
+
+Because no new coins are created in an expiring transaction, we can tweak this constraint, and say that an expiring transaction may be mined up to 100 blocks after its expiration if and only if it is mined in the same block as 1 or more child transactions. In this way, valid transaction chains can be built upon a mined, expiring transaction. In a worst case, non-malicious reorg, ie. an internet partition, the full chain of transactions built upon the expired transaction would suddenly become minable on top of the new longest chain. As long as the expired transaction and any 1 child are then mined within 100 blocks of the original split, the entire transaction chain remains valid.
+
+===Considered threats===
+
+People habitually accept 0-conf transactions. To mitigate that with expiring 0-conf transactions, nodes SHOULD NOT relay transactions spending 0-conf expiring outputs. They SHOULD relay transactions spending expired transactions, if they are received with the expired transaction.
+
+The receiver of an expiring transaction could hold onto the raw tx for 99 blocks after its expiration, then publish it with child transaction, but this is a deliberate malicious action similar to a malicious double spend from a threat modeling perspective. A wallet policy that preferentially spends UTXOs that had been used in expired transactions would reduce the risk (ie. if a new payment for the same purpose was sent after the first expired, and it spent the same UTXO, it would eliminate the incentive and likely the possibility of spending the original).
+
+Both the receiver and the sender of an expiring transaction will need to have realistic expectations about expiration. Ie. they should not consider the transaction truly expired until some number of blocks after the requested expiration. This can be thought of as the refund transaction confirmation time in a traditional payment + refund scenario. Wallets can display funds as such (ie. N-confirmations on refund).  If the transaction does suddenly appear in a reorganized blockchain, the payee SHOULD accept it as having happened prior to the selected expiration time.
+
 ==Motivation==
 
 Mempool expiration does not function properly under real world network conditions. Uncomfirmed transactions persist in the global mempool far beyond the intended expiration period and are regularly repropagated as the network topology changes. This situation leads to significant uncertainty for users in terms of when their transactions will be confirmed, or definitively cancelled. This situation is mitigated if transactions are sent with RBF, and can be replaced with an alternative higher fee transaction consuming the same input, but in practice few wallets fully support the required behaviors.
