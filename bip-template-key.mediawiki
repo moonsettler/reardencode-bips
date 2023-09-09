@@ -129,7 +129,7 @@ If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is
 To verify a signature ''sig'' for a template public key ''p'':
 
 * If the ''sig'' is 64 bytes long, return ''Verify(p, hash<sub>TapSigHash</sub>(0x00 || TemplateMsg(0x00, true)), sig)''
-* If the ''sig'' is 65 bytes long, return ''sig[64] &ne; 0x00 and Verify(p, hash<sub>TapSighash</sub>(0x00 || TemplateMsg(sig[64], true)), sig[0:64])''.
+* If the ''sig'' is 65 bytes long, return ''sig[64] &ne; 0x00 and Verify(p, hash<sub>TapSighash</sub>(0x01<ref>'''Why is the hash prefixed with 0x01?''' To indicate that this is a distinct signature hashing epoch.</ref> || TemplateMsg(sig[64], true)), sig[0:64])''.
 * Otherwise, fail.
 
 ''Verify'' is as defined in [[bip-0340.mediawiki|BIP 340]].
@@ -147,7 +147,7 @@ The validation of <code>OP_CHECKTEMPLATEVERIFY</code> is modified as follows:
 ** Let ''check_hash = check_item[0:32]''
 ** Let ''hash_type = check_item[32]''
 ** If ''hash_type'' equals ''0'', fail.
-** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''
+** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''<ref>'''Why is this not a tagged hash?''' See [[bip-0119.mediawiki|BIP119]]'s discussion of this topic. With 33-byte hashes, each hash type is identified by the ''hash_type'' value (or lack thereof) committed to.</ref>
 ** If ''template_hash'' does not equal ''check_hash'', fail.
 
 ==== What is hashed? ====
@@ -211,6 +211,13 @@ We define the following ''template_tx_mode'' hashing modes.
 Modes ''0x08'', ''0x0c'', ''0x48'', and ''0x4c'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
 
 Modes ''0x80'' and ''0x84'' only work on input 0 which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
+
+==== Comparison to [[bip-0341.mediawiki|BIP341]], [[bip-0342.mediawiki|BIP342]], and [[bip-0118.mediawiki|BIP118]] sighash modes ====
+
+''SIGHASH_ALL (0x01)'' ~= ''0x0c'', ''|SINGLE (0x03)'' ~= ''0x0d'', ''|NONE (0x02)'' ~= ''0x0e''
+''SIGHASH_ANYONECANPAY (0x81)'' ~= ''0x4c'', ''|SINGLE (0x83)'' ~= ''0x4d'', ''|NONE (0x82)'' ~= ''0x4e''
+''SIGHASH_ANYPREVOUT (0x41)'' ~= ''0x48'', ''|SINGLE (0x43)'' ~= ''0x49'', ''|NONE (0x42)'' ~= ''0x4a''
+''SIGHASH_ANYPREVOUTANYSCRIPT (0xc1)'' ~= ''0x44'', ''|SINGLE (0xc3)'' ~= ''0x45'', ''|NONE (0xc2)'' ~= ''0x46''
 
 == Discussion ==
 
