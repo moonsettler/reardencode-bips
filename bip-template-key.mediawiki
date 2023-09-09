@@ -73,7 +73,7 @@ If ''hash_type & 0x03'' does not equal ''0x00'', ''0x01'', or ''0x02'', fail.
 
 If ''hash_type & 0x03'' equals ''0x01'' and there is not an output corresponding to the input being validated, fail.
 
-If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x80'', or ''0x84'', fail.
+If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x4c'', ''0x80'', or ''0x84'', fail.
 
 The parameter ''for_sig'' is a boolean where ''true'' indicates that the message will be hashed for signature validation.
 
@@ -111,7 +111,9 @@ If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is
 **** ''sha_annex'' (32): the SHA256 of ''(compact_size(size of annex) || annex)'', where ''annex'' includes the mandatory ''0x50'' prefix.
 ** If ''template_tx_mode & 0x04'' is equal to ''0''
 *** ''input_index'' (4): index of this input in the transaction input vector. Index of the first input is 0.
-** If ''template_tx_mode'' equals ''0x48'':
+** If ''template_tx_mode'' equals ''0x4c'':
+*** ''prevout'' (36): the <code>COutPoint</code> of this input (32-byte hash + 4-byte little-endian).
+** If ''template_tx_mode'' equals ''0x48'' or ''0x4c'':
 *** ''amount'' (8): value of the previous output spent by this input.
 *** ''scriptPubKey'' (35): ''scriptPubKey'' of the previous output spent by this input, serialized as script inside <code>CTxOut</code>. Its size is always 35 bytes.
 ** If ''template_tx_mode'' equals ''0x08'', ''0x0c'', or ''0x48'':
@@ -176,7 +178,7 @@ We define the following ''template_tx_mode'' hashing modes.
 ! included data
 |-
 | 0x00
-| nInputs, index, locktime, scriptsigs, and all sequences (with ''template_output_mode = 0'', identical to [https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki BIP119])
+| nInputs, index, locktime, scriptsigs, and all sequences (with ''template_output_mode = 0'' and ''for_sig = false'', identical to [https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki BIP119])
 |-
 | 0x04
 | ''0x00'' without locktime, scriptsigs, and all sequences.
@@ -196,6 +198,9 @@ We define the following ''template_tx_mode'' hashing modes.
 | 0x48
 | ''0x44'' with this prevscript and script (similar to BIP118 ''0x4?'')
 |-
+| 0x4c
+| ''0x48'' with this prevout
+|-
 | 0x80
 | ''0x00'' with all but input 0's prevscript
 |-
@@ -203,7 +208,7 @@ We define the following ''template_tx_mode'' hashing modes.
 | ''0x80'' with all but input 0's prevout
 |}
 
-Modes ''0x08'', ''0x0c'', and ''0x48'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
+Modes ''0x08'', ''0x0c'', ''0x48'', and ''0x4c'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
 
 Modes ''0x80'' and ''0x84'' only work on input 0 which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
 
