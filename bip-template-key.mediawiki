@@ -215,8 +215,11 @@ Modes ''0x80'' and ''0x84'' only work on input 0 which is a bit of an odd behavi
 ==== Comparison to [[bip-0341.mediawiki|BIP341]], [[bip-0342.mediawiki|BIP342]], and [[bip-0118.mediawiki|BIP118]] sighash modes ====
 
 ''SIGHASH_ALL (0x01)'' ~= ''0x0c'', ''|SINGLE (0x03)'' ~= ''0x0d'', ''|NONE (0x02)'' ~= ''0x0e''
+
 ''SIGHASH_ANYONECANPAY (0x81)'' ~= ''0x4c'', ''|SINGLE (0x83)'' ~= ''0x4d'', ''|NONE (0x82)'' ~= ''0x4e''
+
 ''SIGHASH_ANYPREVOUT (0x41)'' ~= ''0x48'', ''|SINGLE (0x43)'' ~= ''0x49'', ''|NONE (0x42)'' ~= ''0x4a''
+
 ''SIGHASH_ANYPREVOUTANYSCRIPT (0xc1)'' ~= ''0x44'', ''|SINGLE (0xc3)'' ~= ''0x45'', ''|NONE (0xc2)'' ~= ''0x46''
 
 == Discussion ==
