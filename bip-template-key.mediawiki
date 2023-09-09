@@ -1,0 +1,214 @@
+<pre>
+  BIP: TBD
+  Layer: Consensus (soft fork)
+  Title: Template Hash
+  Author: Brandon Black <freedom@reardencode.com>
+  Status: Draft
+  Type: Standards Track
+  Created: 2023-09-07
+  License: BSD-3-Clause
+  Requires: 119, 340, 341, 342
+  Replaces: 118
+</pre>
+
+== Introduction ==
+
+== Abstract ==
+
+This BIP describes a new set of hashing modes corresponding to a new type of public key for tapscript ([[bip-0342.mediawiki|BIP 342]]) transactions. It additionally defines a virtual public key for use in tapscript, corresponding to the taproot internal key used with these new hashing modes.
+
+The hashing modes defined in this BIP do not do not commit to the previous outpoint being spent, enabling dynamic binding of the signed transaciton to different UTXOs providing the other hashed parts of the transaction match.
+
+In addition to defining these new hashing modes for use in signature verification, this BIP also defines a set of corresponding hashing modes for use with hash equality verification as an extension to [[bip-0119.mediawiki|BIP 119]]. Some of the resulting hashing modes will not be usable with <code>OP_CHECKTEMPLATEVERIFY</code> due to hash cycles.
+
+=== Copyright ===
+
+This document is licensed under the 3-clause BSD license.
+
+=== Motivation ===
+
+The motivation for this BIP is inclusive of the motivation for [[bip-0118.mediawiki|BIP 118]]. Additionally, there has been much discussion of pre-signed output covenants based on [[bip-0118.mediawiki|BIP 118]] signatures, and by explicitly adding the hashing modes introduced in this BIP to [[bip-0119.mediawiki|BIP 119]] these same covenants are enabled with far fewer witness bytes.
+
+The specific design of these hashing modes has been influenced by conversations with James O'Beirne, Greg Sanders, @4moonsettler, Burak Keçeli, Super Testnet, and others. See this [https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-August/021907.html mailing list thread], and [https://delvingbitcoin.org/t/combined-ctv-apo-into-minimal-txhash-csfs/60/8 this post on Delving Bitcoin] for some additional context.
+
+To summarize some of the considerations that have gone into these hashing modes:
+
+* While much ado has been made about the recursive covenants enabled by [[bip-0118.mediawiki|BIP 118]], the recursion enabled is limited to movement between pre-defined states, and only possible using a trusted setup ceremony with deleted keys. These constructions are therefore primarily of academic interest, and do not represent a way to alter the execution flow or incentive model of bitcoin.
+* While Jeremy Rubin has written about the future need for a transaction-external fee payment mechanism for bitcoin transactions (fee accounts, transaction sponsors, etc.); any such proposal is many years away. In the meantime, partial transaction input/output hashing can allow for transaction-internal fees to be added within many proposed protocols.
+* A signature hash that allows rebinding of only one transaction input while fixing one or more others can further enable off-chain protocols.
+** Allowing this in general would create quadratic hashing, so this BIP limits such rebindable single input hashes to the first transaction input, adding only linear hashing in the worst case.
+* One of the limitations of [[bip-0118.mediawiki|BIP 118]] is that it extends the existing [[bip-0341.mediawiki|BIP 341]] and [[bip-0342.mediawiki|BIP 342]] signature hashing, which requires the use of 65-byte signatures for all ANYPREVOUT modes. By introducing an entirely new signature hashing mechanism, this BIP allows the selection of a new default hashing mode specific to Tapscript 33-byte key version 1.
+
+== Specification<ref>Some text copied verbatim from [[bip-0118.mediawiki|BIP 118]].</ref> ==
+
+This BIP modifies the behaviour of the [[bip-0342.mediawiki|BIP 342]] signature opcodes<ref>'''What about key path spends?'''
+This proposal only supports template signatures via script path spends, and does not support template signatures for key path spends.
+This is for two reasons: first, not supporting key path spends allows this proposal to be independent of the core changes included in [[bip-0341.mediawiki|BIP 341]] and [[bip-0342.mediawiki|BIP 342]]; second, it allows addresses to use template signature hashing while remaining indistinguishable prior to being spent.
+</ref> (<code>CHECKSIG</code>, <code>CHECKSIGVERIFY</code>, and <code>CHECKSIGADD</code>) for public keys that have a length of 33 bytes and a first byte of <code>0x01</code> or the public key which is precisely the single byte vector <code>0x01</code><ref>'''Use of 0x01 public key type'''
+Because <code>OP_0</code> leaves an empty vector on the stack it would not satisfy [[bip-0342.mediawiki|BIP 342]]'s rules for unknown public key types. As such, it is convenient to use one of <code>OP_1..OP_16</code> or <code>OP_1NEGATE</code> as a way to reference the taproot internal key.
+To keep things as simple as possible, we use the first of these, and add the same byte as a prefix to allow ANYPREVOUT signatures for explicitly specified keys.
+</ref>.
+These keys are termed '''Template public keys'''.
+
+==== Rules for signature opcodes ====
+
+The [[bip-0342.mediawiki|BIP 342]] rules for signature opcodes are modified by removing keys with the first byte <code>0x01</code> and length of either 1-byte or 33-bytes from the list of unknown public key types, and adding the following rule prior to the handling of unknown public key types:
+
+* If the public key is the single byte <code>0x01</code>, or if the public key is 33 bytes and the first byte of the public key is <code>0x01</code>, it is considered to be a template public key:
+** If the signature is not the empty vector, the signature is validated according to the [[bip-0341.mediawiki|BIP 341]] signing validation rules with the public key, allowable <code>hash_type</code> values, and transaction digest modified as defined below.
+
+==== Public key ====
+
+To convert the 1-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 340]], use the 32-byte taproot internal key, <code>p</code>, as defined in [[bip-0341.mediawiki|BIP 341]].
+
+To convert a 33-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 340]], remove the <code>0x01</code> prefix and use the remaining 32 bytes.
+
+==== Signature message ====
+
+We define the function ''TemplateMsg(hash_type, for_sig)'' which computes the message being signed as a byte array.
+
+The parameter ''hash_type'' is an 8-bit unsigned value.
+
+If ''hash_type & 0x03'' does not equal ''0x00'', ''0x01'', or ''0x02'', fail. 
+
+If ''hash_type & 0x03'' equals ''0x01'' and there is not an output corresponding to the input being validated, fail.
+
+If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x80'', or ''0x84'', fail.
+
+The parameter ''for_sig'' is a boolean where ''true'' indicates that the message will be hashed for signature validation.
+
+If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is the contatenation of the following data, in order (with byte size of each item listed in parentheses). Numerical values in 2, 4, or 8-byte are encoded in little-endian.
+
+* Control:
+** ''hash_type'' (1).
+* Transaction data:
+** ''nVersion'' (4): the ''nVersion'' of the transaction.
+** If ''template_tx_mode'' is not equal to ''0x04'' or ''0x40'':
+*** ''nLockTime'' (4): the ''nLockTime'' of the transaction.
+** If ''template_tx_mode & 0x40'' equals ''0'' and ''template_tx_mode'' is not equal to 0x04:
+*** ''sha_scriptsigs'' (32): the SHA256 of the serialization of all input ''scriptSigs''.
+** If ''template_tx_mode & 0x40'' equals ''0'':
+*** ''nInputs'' (4): the 32-bit little endian serialization of the number of transaction inputs.
+** If ''template_tx_mode'' is equal to ''0x0c'':
+*** ''sha_prevouts'' (32): the SHA256 of the serialization of all input outpoints.
+** If ''template_tx_mode'' is equal to ''0x84'':
+*** ''sha_rest_prevouts'' (32): the SHA256 of the serialization of all input outpoints other than the first.
+** If ''template_tx_mode'' is equal to ''0x08'' or ''0x0c''
+*** ''sha_amounts'' (32): the SHA256 of the serialization of all input amounts.
+*** ''sha_scriptpubkeys'' (32): the SHA256 of all spent outputs' ''scriptPubKeys'', serialized as script inside <code>CTxOut</code>.
+** If ''template_tx_mode'' is equal to ''0x80'' or ''0x84''
+*** ''sha_rest_amounts'' (32): the SHA256 of the serialization of all input amounts other than the first.
+*** ''sha_rest_scriptpubkeys'' (32): the SHA256 of all spent outputs' ''scriptPubKeys'' other than the first, serialized as script inside <code>CTxOut</code>.
+** If ''template_tx_mode & 0x40'' equals ''0'' and ''template_tx_mode'' is not equal to ''0x04'':
+*** ''sha_sequences'' (32): the SHA256 of the serialization of all input ''nSequence''.
+** If ''template_output_mode'' equals ''0'':
+*** ''nOoutputs'' (4): the 32-bit little endian serializtion of the number of transaction outputs
+*** ''sha_outputs'' (32): the SHA256 of the serialization of all outputs in <code>CTxOut</code> format.
+* Data about this input:
+** If ''for_sig'' is ''true'':
+*** ''spend_type'' (1): equal to ''(ext_flag * 2) + annex_present'', where ''annex_present'' is 0 if no annex is present, or 1 otherwise (the original witness stack has two or more witness elements, and the first byte of the last element is ''0x50'')
+*** If an annex is present (the lowest bit of ''spend_type'' is set):
+**** ''sha_annex'' (32): the SHA256 of ''(compact_size(size of annex) || annex)'', where ''annex'' includes the mandatory ''0x50'' prefix.
+** If ''template_tx_mode & 0x04'' is equal to ''0''
+*** ''input_index'' (4): index of this input in the transaction input vector. Index of the first input is 0.
+** If ''template_tx_mode'' equals ''0x48'':
+*** ''amount'' (8): value of the previous output spent by this input.
+*** ''scriptPubKey'' (35): ''scriptPubKey'' of the previous output spent by this input, serialized as script inside <code>CTxOut</code>. Its size is always 35 bytes.
+** If ''template_tx_mode'' equals ''0x08'', ''0x0c'', or ''0x48'':
+*** ''controlblock_hash'' (32): the SHA256 of the BIP341 control block of the input being validated.
+*** ''tapleaf_hash'' (32): the tapleaf hash as defined in [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#design BIP341]
+*** ''codesep_pos'' (4): the opcode position of the last executed <code>OP_CODESEPARATOR</code> before the currently executed opcode, as defined in [https://github.com/bitcoin/bips/blob/master/bip-0342.mediawiki#common-signature-message-extension BIP342].
+** If ''template_tx_mode'' is equal to ''0x44'' or ''0x48'':
+*** ''nSequence'' (4): ''nSequence'' of this input.
+* Data about this output:
+** If ''template_output_mode'' equals ''0x01'':
+*** ''sha_single_output'' (32): the SHA256 of the corresponding output in <code>CTxOut</code> format.
+
+To verify a signature ''sig'' for a template public key ''p'':
+
+* If the ''sig'' is 64 bytes long, return ''Verify(p, hash<sub>TapSigHash</sub>(0x00 || TemplateMsg(0x00, true)), sig)''
+* If the ''sig'' is 65 bytes long, return ''sig[64] &ne; 0x00 and Verify(p, hash<sub>TapSighash</sub>(0x00 || TemplateMsg(sig[64], true)), sig[0:64])''.
+* Otherwise, fail.
+
+''Verify'' is as defined in [[bip-0340.mediawiki|BIP 340]].
+
+==== Rules for <code>OP_CHECKTEMPLATEVERIFY</code> ====
+
+The validation of <code>OP_CHECKTEMPLATEVERIFY</code> is modified as follows:
+
+* If there is not at least one element on the stack, fail.
+* If the top element on the stack is not 32 or 33-bytes long, NOP.
+* If the top element on the stack is 32-bytes long:
+** If the DefaultCheckTemplateVerifyHash does not equal the top stack element, fail.
+* Else: (33-byte stack element)
+** Let ''check_item = stack_top()''
+** Let ''check_hash = check_item[0:32]''
+** Let ''hash_type = check_item[32]''
+** If ''hash_type'' equals ''0'', fail.
+** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''
+** If ''template_hash'' does not equal ''check_hash'', fail.
+
+==== What is hashed? ====
+
+While the above description of ''TemplateMsg'' is useful for implementors, it is difficult to understand from the text exactly what is hashed for each ''hash_type''. Here we describe the hashed data in another more digestible format.
+
+We define the following input related data elements:
+
+* may be included for any input
+** ''prevout'':
+** ''prevscript'': output amount and script
+** ''sequence'':
+* only from the input being validated
+** ''script'': control block<ref>Without the control block, a transaction with 2 identical script paths may be [https://github.com/bitcoin-inquisition/bitcoin/issues/19 malleated] after signing.</ref>, leaf script, and code separator position
+** ''annex'': taproot spend type and annex
+** ''index'': the input index, with the first input having index 0
+* only for all inputs if present:
+** ''scriptsigs'': hash of all scriptSigs if any scriptSig is non-empty
+
+If ''template_output_mode'' equals 0, ''nOutputs'' and ''sha_outputs'' are included in the hash. If ''template_output_mode'' equals 1, the corresponding output's ''sha_single_output'' is included. Otherwise no output data is included.
+
+If ''for_sig'' is ''true'', the Taproot annex and spend type are hashed.
+
+We define the following ''template_tx_mode'' hashing modes.
+
+{|
+! template_tx_mode
+! included data
+|-
+| 0x00
+| nInputs, index, locktime, scriptsigs, and all sequences (with ''template_output_mode = 0'', identical to [https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki BIP119])
+|-
+| 0x04
+| ''0x00'' without locktime, scriptsigs, and all sequences.
+|-
+| 0x08
+| ''0x00'' with all prevscripts and script
+|-
+| 0x0c
+| ''0x08'' with all prevouts
+|-
+| 0x40
+| -
+|-
+| 0x44
+| locktime and this sequence (similar to BIP118 ''0xc?'')
+|-
+| 0x48
+| ''0x44'' with this prevscript and script (similar to BIP118 ''0x4?'')
+|-
+| 0x80
+| ''0x00'' with all but input 0's prevscript
+|-
+| 0x84
+| ''0x80'' with all but input 0's prevout
+|}
+
+Modes ''0x08'', ''0x0c'', and ''0x48'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
+
+Modes ''0x80'' and ''0x84'' only work on input 0 which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
+
+= Discussion =
+
+This BIP aims to provide a set of hashing modes with broad applicability to current and future proposals, including <code>OP_VAULT</code>, LN-Symmetry, Ark, Lightning PTLCs, &c.
+
+<references />
