@@ -212,7 +212,7 @@ Modes ''0x08'', ''0x0c'', ''0x48'', and ''0x4c'' do not work with <code>OP_CHECK
 
 Modes ''0x80'' and ''0x84'' only work on input 0 which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
 
-= Discussion =
+== Discussion ==
 
 This BIP aims to provide a set of hashing modes with broad applicability to current and future proposals, including <code>OP_VAULT</code>, LN-Symmetry, Ark, Lightning PTLCs, &c.
 
