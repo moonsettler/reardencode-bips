@@ -71,7 +71,7 @@ The parameter ''hash_type'' is an 8-bit unsigned value.
 
 If ''hash_type & 0x03'' equals ''0x01'' and there is not an output corresponding to the input being validated, fail.
 
-If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x4c'', ''0x80'', or ''0x84'', fail.
+If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x4c'', ''0x80'', ''0x84'', or ''0x88'', fail.
 
 The parameter ''for_sig'' is a boolean where ''true'' indicates that the message will be hashed for signature validation.
 
@@ -89,12 +89,12 @@ If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is
 *** ''nInputs'' (4): the 32-bit little endian serialization of the number of transaction inputs.
 ** If ''template_tx_mode'' is equal to ''0x0c'':
 *** ''sha_prevouts'' (32): the SHA256 of the serialization of all input outpoints.
-** If ''template_tx_mode'' is equal to ''0x84'':
+** If ''template_tx_mode'' is equal to ''0x84'' or ''0x88'':
 *** ''sha_rest_prevouts'' (32): the SHA256 of the serialization of all input outpoints other than the first.
-** If ''template_tx_mode'' is equal to ''0x08'' or ''0x0c''
+** If ''template_tx_mode'' is equal to ''0x08'', ''0x0c'', or ''0x88'':
 *** ''sha_amounts'' (32): the SHA256 of the serialization of all input amounts.
 *** ''sha_scriptpubkeys'' (32): the SHA256 of all spent outputs' ''scriptPubKeys'', serialized as script inside <code>CTxOut</code>.
-** If ''template_tx_mode'' is equal to ''0x80'' or ''0x84''
+** If ''template_tx_mode'' is equal to ''0x80'', or ''0x84'':
 *** ''sha_rest_amounts'' (32): the SHA256 of the serialization of all input amounts other than the first.
 *** ''sha_rest_scriptpubkeys'' (32): the SHA256 of all spent outputs' ''scriptPubKeys'' other than the first, serialized as script inside <code>CTxOut</code>.
 ** If ''template_tx_mode & 0x40'' equals ''0'' and ''template_tx_mode'' is not equal to ''0x04'':
@@ -117,7 +117,7 @@ If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is
 ** If ''template_tx_mode'' equals ''0x48'' or ''0x4c'':
 *** ''amount'' (8): value of the previous output spent by this input.
 *** ''scriptPubKey'' (35): ''scriptPubKey'' of the previous output spent by this input, serialized as script inside <code>CTxOut</code>. Its size is always 35 bytes.
-** If ''template_tx_mode'' equals ''0x08'', ''0x0c'', or ''0x48'':
+** If ''template_tx_mode'' equals ''0x08'', ''0x0c'', ''0x48'', or ''0x88'':
 *** ''controlblock_hash'' (32): the SHA256 of the BIP341 control block of the input being validated.
 *** ''tapleaf_hash'' (32): the tapleaf hash as defined in [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#design BIP341]
 *** ''codesep_pos'' (4): the opcode position of the last executed <code>OP_CODESEPARATOR</code> before the currently executed opcode, as defined in [https://github.com/bitcoin/bips/blob/master/bip-0342.mediawiki#common-signature-message-extension BIP342].
@@ -207,11 +207,14 @@ We define the following ''template_tx_mode'' hashing modes.
 |-
 | 0x84
 | ''0x80'' with all but input 0's prevout
+|-
+| 0x88
+| ''0x08'' with all but input 0's prevout
 |}
 
-Modes ''0x08'', ''0x0c'', ''0x48'', and ''0x4c'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
+Modes ''0x08'', ''0x0c'', ''0x48'', ''0x4c'', and ''0x88'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
 
-Modes ''0x80'' and ''0x84'' only work on input 0 which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
+Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIFY</code> which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
 
 ==== Comparison to [[bip-0341.mediawiki|BIP341]], [[bip-0342.mediawiki|BIP342]], and [[bip-0118.mediawiki|BIP118]] sighash modes ====
 
