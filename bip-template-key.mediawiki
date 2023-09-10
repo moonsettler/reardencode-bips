@@ -69,8 +69,6 @@ We define the function ''TemplateMsg(hash_type, for_sig)'' which computes the me
 
 The parameter ''hash_type'' is an 8-bit unsigned value.
 
-If ''hash_type & 0x03'' does not equal ''0x00'', ''0x01'', or ''0x02'', fail. 
-
 If ''hash_type & 0x03'' equals ''0x01'' and there is not an output corresponding to the input being validated, fail.
 
 If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x4c'', ''0x80'', or ''0x84'', fail.
@@ -101,9 +99,12 @@ If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is
 *** ''sha_rest_scriptpubkeys'' (32): the SHA256 of all spent outputs' ''scriptPubKeys'' other than the first, serialized as script inside <code>CTxOut</code>.
 ** If ''template_tx_mode & 0x40'' equals ''0'' and ''template_tx_mode'' is not equal to ''0x04'':
 *** ''sha_sequences'' (32): the SHA256 of the serialization of all input ''nSequence''.
-** If ''template_output_mode'' equals ''0'':
+** If ''template_output_mode'' equals ''0'' or ''2'':
 *** ''nOoutputs'' (4): the 32-bit little endian serializtion of the number of transaction outputs
+** If ''template_output_mode'' equals ''0'':
 *** ''sha_outputs'' (32): the SHA256 of the serialization of all outputs in <code>CTxOut</code> format.
+** If ''template_output_mode'' equals ''2'':
+*** ''sha_rest_outputs'' (32): the SHA256 of the serialization of all outputs other than the first in <code>CTxOut</code> format.
 * Data about this input:
 ** If ''for_sig'' is ''true'':
 *** ''spend_type'' (1): equal to ''(ext_flag * 2) + annex_present'', where ''annex_present'' is 0 if no annex is present, or 1 otherwise (the original witness stack has two or more witness elements, and the first byte of the last element is ''0x50'')
@@ -167,7 +168,7 @@ We define the following input related data elements:
 * only for all inputs if present:
 ** ''scriptsigs'': hash of all scriptSigs if any scriptSig is non-empty
 
-If ''template_output_mode'' equals 0, ''nOutputs'' and ''sha_outputs'' are included in the hash. If ''template_output_mode'' equals 1, the corresponding output's ''sha_single_output'' is included. Otherwise no output data is included.
+If ''template_output_mode'' equals 0, ''nOutputs'' and ''sha_outputs'' are included in the hash. If ''template_output_mode'' equals 1, the corresponding output's ''sha_single_output'' is included. If ''template_output_mode'' equals 2, all outputs except output 0 are included in the hash. Otherwise no output data is included.
 
 If ''for_sig'' is ''true'', the Taproot annex and spend type are hashed.
 
