@@ -1,0 +1,435 @@
+<pre>
+  BIP: tbd
+  Layer: Consensus (soft fork)
+  Title: OP_TXHASH and OP_CHECKTXHASHVERIFY
+  Author: Steven Roose <steven@roose.io>
+  Comments-URI: https://github.com/bitcoin/bips/wiki/Comments:BIP-tbd
+  Status: Draft
+  Type: Standards Track
+  Created: 2023-09-03
+  License: BSD-3-Clause
+</pre>
+
+==Abstract==
+
+This BIP proposes two new opcodes, OP_CHECKTXHASHVERIFY, to be activated
+as a change to the semantics of OP_NOP4 in legacy script, segwit and tapscript;
+and OP_TXHASH, to be activated as a change to the semantics of OP_SUCCESS189.
+
+These new opcodes allow for the construction of covenants of varying
+complexity, which are described in the Motivation section of this BIP.
+
+
+==Summary==
+
+OP_CHECKTXHASHVERIFY uses opcode OP_NOP4 (0xb3) as a soft fork upgrade.
+
+OP_CHECKTXHASHVERIFY does the following:
+
+* There is at least one element on the stack, fail otherwise.
+* The element on the stack is at least 32 bytes long, fail otherwise.
+* The last 32 bytes are interpreted as the TxHash and the remaining prefix
+  bytes specify the TxHashType.
+* If ValidateTxHashType fails for the provided TxHashType, fail.
+* The actual TxHash of the transaction at the current input index, calculated
+  using the given TxHashType is equal to the last 32 bytes of the element on
+  the stack, fail otherwise.
+
+
+OP_TXHASH uses tapscript opcode OP_SUCCESS189 (0xbd) as a soft fork upgrade.
+
+OP_TXHASH does the following:
+
+* There is at least one element on the stack, fail otherwise.
+* This element is popped off the stack.
+* The element is interpreted as the TxHashType.
+* If ValidateTxHashType fails for the provided TxHashType, fail.
+* The 32-byte TxHash of the transaction at the current input index,
+  calculated using the given TxHashType is pushed on the stack.
+
+The TxHashType has the following semantics. We will give a brief conceptual
+summary, followed by a pseudo-implementation of the CalculateTxHash function.
+
+* If the TxHashType is zero bytes long, it is set equal to
+  0xff|0xc3|0x6f|0xff|0xff, which means everything except the prevouts and the
+  prevout scriptPubkeys.
+* The first two bytes of the TxHashType have their 16 bits assigned as follows,
+  from lowest to highest:
+  1. version
+  2. locktime
+  3. nb_inputs
+  4. nb_outputs
+  5. inputs
+  6. outputs
+  7. current input index
+  8. current input control block
+  9. same index output scriptPubkey
+  10. same index output value
+  11. unused
+  12. unused
+  13. unused
+  14. unused
+  15. unused
+  16. in/out range type
+
+* If either "inputs" or "outputs" is set to 1, expect another byte with its 8
+  bits assigning the following variables, from lowest to highest:
+  * Specifying which fields of the inputs will be hashed:
+    1. prevouts
+    2. sequences
+    3. scriptSigs
+    4. prevout scriptPubkeys
+    5. prevout values
+    6. taproot annexes
+  * Specifying which fields of the outputs will be hashed:
+    7. scriptPubkeys
+    8. values
+
+* If the "inputs" field is set to 1, another additional byte is expected:
+  * If the "in/out range type" bit is set to 1, the byte is interpreted
+    as the number of leading inputs of the current transaction to include
+    in the inputs hash.
+    * When this byte is set to 0xff, all inputs are committed instead.
+  * If the "in/out range type" is set to 0, the byte is interpreted as the
+    number of leading inputs of the current transaction to include based on
+    bitflags specified in the succeeding bytes. A number of additional bytes
+    is expected so that these bytes have enough bits for the number of leading
+    inputs required.
+    For example, if the byte is the number 9, expect 2 more bytes of which
+    the bits specify from highest to lowest whether or not to include the 9
+    leading inputs in the input hash.
+
+* If the "outputs" field is set to 1, another additional byte is expected:
+  * If the "in/out range type" bit is set to 1, the byte is interpreted
+    as the number of leading outputs of the current transaction to include
+    in the outputs hash.
+    * When this byte is set to 0xff, all outputs are committed instead.
+  * If the "in/out range type" is set to 0, the byte is interpreted as the
+    number of leading outputs of the current transaction to include based on
+    bitflags specified in the succeeding bytes. A number of additional bytes
+    is expected so that these bytes have enough bits for the number of leading
+    outputs required.
+    For example, if the byte is the number 9, expect 2 more bytes of which
+    the bits specify from highest to lowest whether or not to include the 9
+    leading outputs in the output hash.
+
+//TODO(stevenroose) should we use a simple sha256 or a tagged hash?
+// I don't really see a value of the tagged hash, unless this will ever be
+// re-used for an actual sighash
+
+The function ValidateTxHashType has the following semantics:
+
+* If there are 0 bytes, it becomes the default of 0xff|0xff|0xff|0xff.
+* If in the first byte, "inputs" and "outputs" is 0, it must be exactly 1 byte
+  long, otherwise fail.
+* If in the first byte, "inputs" or "outputs" is 1, check the following:
+  * There must be a second byte, otherwise fail.
+  * If the lowest bit of the second byte is 1, there should be 2 bytes, plus
+    1 byte if "inputs" is 1, plus 1 byte if "outputs" is 1.
+  * If the lowest bit of the second byte is 0, there should be 2 bytes,
+    * plus 1 byte plus a number of bytes equal to the value of this byte
+      divided by 8, rounded up, if "inputs" is 1,
+    * plus 1 byte plus a number of bytes equal to the value of this byte
+      divided by 8, rounded up, if "outputs" is 1,
+    fail otherwise.
+
+
+The recommended standardness rules additionally:
+
+* Reject pushes following OP_CHECKTXHASHVERIFY not between 32 and 36 bytes
+  as SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS.
+* Reject pushes following OP_TXHASH not between 0 and 4 bytes
+  as SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS.
+
+
+===Resource limits===
+
+* For legacy scripts and segwit, we don't add any extra resource limitations,
+  with the argumentation that OP_CHECKTXHASHVERIFY already requires the user
+  to provide at least 32 bytes of extra transaction size, either in the input
+  scriptSig, or the witness. Additional more complex hashes require 1 to 3
+  additional bytes. Given that OP_CAT is not available, if a malicious user
+  tries to increase the number of TransactionHashes being calculated by using
+  opcodes like OP_DUP, the TxHashType for all these calculations is identical,
+  so the calculation can be cached within the same transaction.
+
+* For tapscript, primarily motivated by the cheaper opcode OP_TXHASH (that
+  doesn't require an additional 32 witness bytes be provided) and the potential
+  future addition of byte manipulation opcodes like OP_CAT, an additional cost
+  is specified per TransactionHash execution.
+  Using the same validation budget ("sigops budget") introduced in BIP-0342,
+  each TransactionHash decreases the validation budget by 10. If that brings
+  the budget below zero, the script fails immediately.
+
+
+==Motivation==
+
+Covenants are restrictions on how a coin may be spent beyond key ownership.
+Covenants in Bitcoin transactions usually refer to restrictions on where coins
+can be transferred. Covenants can be useful to construct smart contracts.
+
+This BIP introduces a flexible covenant primitive by effectively providing
+limited introspection into the transaction that is being spent. This primitive
+enables a wide range of possibilities in specifying the transaction graph
+following a specific outupt. This can f.e. serve as a replacement for a
+pre-signed transaction oracle, which eliminates the trust and interactivity
+requirements.
+
+Examples of uses include vaults, non-interactive payment channel creation,
+congestion controlled batching, constructing discreet log contracts, and payment
+pools, among many others. For more details on these applications, please see the
+references.
+
+
+
+==Detailed Specification==
+
+
+<source lang="rust">
+pub fn validate_txhashtype(
+    hashtype: &[u8],
+    nb_inputs: usize,
+    nb_outputs: usize,
+) -> Result<(), &'static str> {
+    if hashtype.is_empty() {
+        return Ok(());
+    }
+
+    if hashtype[0] & TXHASHTYPE_INPUTS != 0 {
+        if hashtype.len() < 3 {
+            return Err("invalid txhashtype");
+        }
+
+        if hashtype[1] & TXHASHTYPE_INPUTS_ALL == 0 {
+            return Err("inputs bit set but no input bits set");
+        }
+
+        let count = hashtype[2] as usize;
+        let all = hashtype[1] & TXHASHTYPE_INOUT_LEADING != 0 && hashtype[2] == 0xff;
+        if !all && count > nb_inputs {
+            return Err("tx hash less inputs than input count given");
+        }
+
+        if hashtype[1] & TXHASHTYPE_INOUT_LEADING == 0 {
+            // expecting bytes to specify inputs
+            let nb_bytes = count / 8 + (count % 8 != 0) as usize;
+            if hashtype.len() < 3 + nb_bytes {
+                return Err("not enough hashtype bytes for input bitfield");
+            }
+        }
+    }
+
+   if hashtype[0] & TXHASHTYPE_OUTPUTS != 0 {
+        let hashtype_offset = if hashtype[0] & TXHASHTYPE_INPUTS != 0 {
+            2
+        } else {
+            if hashtype[1] & TXHASHTYPE_INOUT_LEADING != 0 {
+                3
+            } else {
+                let count = hashtype[2];
+                let nb_bytes = count / 8 + (count % 8 != 0) as u8;
+                3 + nb_bytes as usize
+            }
+        };
+
+        if hashtype.len() < hashtype_offset + 1 {
+            return Err("invalid txhashtype");
+        }
+
+        if hashtype[1] & TXHASHTYPE_OUTPUTS_ALL == 0 {
+            return Err("outputs bit set but no output bits set");
+        }
+
+        let count = hashtype[hashtype_offset] as usize;
+        let all = hashtype[1] & TXHASHTYPE_INOUT_LEADING != 0 && hashtype[hashtype_offset] == 0xff;
+        if !all && count > nb_outputs {
+            return Err("tx hash less outputs than output count given");
+        }
+
+        if hashtype[1] & TXHASHTYPE_INOUT_LEADING == 0 {
+            // expecting bytes to specify outputs
+            let nb_bytes = count / 8 + (count % 8 != 0) as usize;
+            if hashtype.len() < hashtype_offset + 1 + nb_bytes {
+                return Err("not enough hashtype bytes for output bitfield");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+pub fn calculate_txhash(
+    hashtype: &[u8],
+    tx: &Transaction,
+    prevouts: &[&TxOut],
+    current_input_idx: u32,
+    annex: Option<Annex>,
+) -> sha256::Hash {
+    assert!(validate_txhashtype(hashtype, tx.input.len(), tx.output.len()).is_ok());
+    assert_eq!(tx.input.len(), prevouts.len());
+
+    let hashtype = if hashtype.is_empty() {
+        &DEFAULT_TXHASH_TYPE
+    } else {
+        hashtype
+    };
+
+    let mut engine = sha256::Hash::engine();
+
+    engine.emit_slice(hashtype).unwrap();
+
+    if hashtype[0] & TXHASHTYPE_VERSION != 0 {
+        tx.version.consensus_encode(&mut engine).unwrap();
+    }
+
+    if hashtype[0] & TXHASHTYPE_LOCKTIME != 0 {
+        tx.lock_time.consensus_encode(&mut engine).unwrap();
+    }
+
+    if hashtype[0] & TXHASHTYPE_NB_INPUTS != 0 {
+        (tx.input.len() as u32).consensus_encode(&mut engine).unwrap();
+    }
+
+    if hashtype[0] & TXHASHTYPE_NB_OUTPUTS != 0 {
+        (tx.output.len() as u32).consensus_encode(&mut engine).unwrap();
+    }
+
+    if hashtype[0] & TXHASHTYPE_INPUTS != 0 {
+        let count = hashtype[2] as usize;
+        let all = hashtype[2] == 0xff;
+
+        let which = if hashtype[1] & TXHASHTYPE_INOUT_LEADING != 0 {
+            [true; 255]
+        } else {
+            // expecting bytes to specify inputs
+            let nb_bytes = count / 8 + (count % 8 != 0) as usize;
+            bitfields(&hashtype[3 .. 3 + nb_bytes])
+        };
+
+        if hashtype[1] & TXHASHTYPE_INPUTS_PREVOUTS != 0 {
+            let mut prevouts_engine = sha256::Hash::engine();
+            for (i, input) in tx.input.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    if i == current_input_idx as usize {
+                        prevouts_engine.emit_slice(&[0u8; 36]).unwrap();
+                    } else {
+                        input.previous_output.consensus_encode(&mut prevouts_engine).unwrap();
+                    }
+                }
+            }
+            let hash = sha256::Hash::from_engine(prevouts_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+
+        if hashtype[1] & TXHASHTYPE_INPUTS_SEQUENCES != 0 {
+            let mut sequences_engine = sha256::Hash::engine();
+            for (i, input) in tx.input.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    input.sequence.consensus_encode(&mut sequences_engine).unwrap();
+                }
+            }
+            let hash = sha256::Hash::from_engine(sequences_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+
+        if hashtype[1] & TXHASHTYPE_INPUTS_SCRIPTSIGS != 0 {
+            let mut scriptsigs_engine = sha256::Hash::engine();
+            for (i, input) in tx.input.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    input.script_sig.consensus_encode(&mut scriptsigs_engine).unwrap();
+                }
+            }
+            let hash = sha256::Hash::from_engine(scriptsigs_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+
+        if hashtype[1] & TXHASHTYPE_INPUTS_PREV_SCRIPTPUBKEYS != 0 {
+            let mut prev_spks_engine = sha256::Hash::engine();
+            for (i, prev) in prevouts.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    prev.script_pubkey.consensus_encode(&mut prev_spks_engine).unwrap();
+                }
+            }
+            let hash = sha256::Hash::from_engine(prev_spks_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+
+        if hashtype[1] & TXHASHTYPE_INPUTS_PREV_VALUES != 0 {
+            let mut prev_values_engine = sha256::Hash::engine();
+            for (i, prev) in prevouts.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    prev.value.consensus_encode(&mut prev_values_engine).unwrap();
+                }
+            }
+            let hash = sha256::Hash::from_engine(prev_values_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+    }
+
+    if hashtype[0] & TXHASHTYPE_OUTPUTS != 0 {
+        let hashtype_offset = if hashtype[0] & TXHASHTYPE_INPUTS != 0 {
+            2
+        } else {
+            if hashtype[1] & TXHASHTYPE_INOUT_LEADING != 0 {
+                3
+            } else {
+                let count = hashtype[2];
+                let nb_bytes = count / 8 + (count % 8 != 0) as u8;
+                3 + nb_bytes as usize
+            }
+        };
+
+        let count = hashtype[hashtype_offset] as usize;
+        let all = hashtype[hashtype_offset] == 0xff;
+
+        let which = if hashtype[1] & TXHASHTYPE_INOUT_LEADING != 0 {
+            [true; 255]
+        } else {
+            // expecting bytes to specify outputs
+            let nb_bytes = count / 8 + (count % 8 != 0) as usize;
+            bitfields(&hashtype[hashtype_offset + 1 .. hashtype_offset + 1 + nb_bytes])
+        };
+
+        if hashtype[1] & TXHASHTYPE_OUTPUTS_SCRIPT_PUBKEYS != 0 {
+            let mut spks_engine = sha256::Hash::engine();
+            for (i, output) in tx.output.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    output.script_pubkey.consensus_encode(&mut spks_engine).unwrap();
+                }
+            }
+            let hash = sha256::Hash::from_engine(spks_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+
+        if hashtype[1] & TXHASHTYPE_OUTPUTS_VALUES != 0 {
+            let mut values_engine = sha256::Hash::engine();
+            for (i, output) in tx.output.iter().enumerate() {
+                if all || (i < count && which[i]) {
+                    output.value.consensus_encode(&mut values_engine).unwrap();
+                }
+            }
+            let hash = sha256::Hash::from_engine(values_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+    }
+
+    if hashtype[0] & TXHASHTYPE_INPUT_IDX != 0 {
+        current_input_idx.consensus_encode(&mut engine).unwrap();
+    }
+
+    if hashtype[0] & TXHASHTYPE_ANNEX != 0 {
+        if let Some(annex) = annex {
+            let mut annex_engine = sha256::Hash::engine();
+            annex.consensus_encode(&mut annex_engine).unwrap();
+            let hash = sha256::Hash::from_engine(annex_engine);
+            hash.consensus_encode(&mut engine).unwrap();
+        }
+    }
+
+    sha256::Hash::from_engine(engine)
+}
+</source>
+
+
+
+
