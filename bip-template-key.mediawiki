@@ -17,9 +17,9 @@
 
 This BIP describes a new set of hashing modes corresponding to a new type of public key for tapscript ([[bip-0342.mediawiki|BIP 342]]) transactions. It additionally defines a virtual public key for use in tapscript, corresponding to the taproot internal key used with these new hashing modes.
 
-The hashing modes defined in this BIP do not do not commit to the previous outpoint being spent, enabling dynamic binding of the signed transaciton to different UTXOs providing the other hashed parts of the transaction match.
+Many of the hashing modes defined in this BIP do not commit to the previous outpoint being spent, enabling dynamic binding of the signed transaciton to different UTXOs providing the other hashed parts of the transaction match.
 
-In addition to defining these new hashing modes for use in signature verification, this BIP also defines a set of corresponding hashing modes for use with hash equality verification as an extension to [[bip-0119.mediawiki|BIP 119]]. Some of the resulting hashing modes will not be usable with <code>OP_CHECKTEMPLATEVERIFY</code> due to hash cycles.
+In addition to defining these new hashing modes for use in signature verification, this BIP also defines a set of corresponding hashing modes for use with hash equality verification as an extension to [[bip-0119.mediawiki|BIP 119]]. Some of the resulting hashing modes will not be useful due to hash cycles.
 
 === Copyright ===
 
@@ -27,7 +27,7 @@ This document is licensed under the 3-clause BSD license.
 
 === Motivation ===
 
-The motivation for this BIP is inclusive of the motivation for [[bip-0118.mediawiki|BIP 118]]. Additionally, there has been much discussion of pre-signed output covenants based on [[bip-0118.mediawiki|BIP 118]] signatures, and by explicitly adding the hashing modes introduced in this BIP to [[bip-0119.mediawiki|BIP 119]] these same covenants are enabled with far fewer witness bytes.
+The motivation for this BIP is inclusive of the motivation for [[bip-0118.mediawiki|BIP 118]]. Additionally, there has been much discussion of pre-signed output covenants based on [[bip-0118.mediawiki|BIP 118]] signatures and by explicitly adding the hashing modes introduced in this BIP to [[bip-0119.mediawiki|BIP 119]] these same covenants are enabled with far fewer witness bytes.
 
 The specific design of these hashing modes has been influenced by conversations with James O'Beirne, Greg Sanders, @4moonsettler, Burak Keçeli, Super Testnet, and others. See this [https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-August/021907.html mailing list thread], and [https://delvingbitcoin.org/t/combined-ctv-apo-into-minimal-txhash-csfs/60/8 this post on Delving Bitcoin] for some additional context.
 
@@ -37,7 +37,7 @@ To summarize some of the considerations that have gone into these hashing modes:
 * While Jeremy Rubin has written about the future need for a transaction-external fee payment mechanism for bitcoin transactions (fee accounts, transaction sponsors, etc.); any such proposal is many years away. In the meantime, partial transaction input/output hashing can allow for transaction-internal fees to be added within many proposed protocols.
 * A signature hash that allows rebinding of only one transaction input while fixing one or more others can further enable off-chain protocols.
 ** Allowing this in general would create quadratic hashing, so this BIP limits such rebindable single input hashes to the first transaction input, adding only linear hashing in the worst case.
-* One of the limitations of [[bip-0118.mediawiki|BIP 118]] is that it extends the existing [[bip-0341.mediawiki|BIP 341]] and [[bip-0342.mediawiki|BIP 342]] signature hashing, which requires the use of 65-byte signatures for all ANYPREVOUT modes. By introducing an entirely new signature hashing mechanism, this BIP allows the selection of a new default hashing mode specific to Tapscript 33-byte key version 1.
+* One of the limitations of [[bip-0118.mediawiki|BIP 118]] is that it extends the existing [[bip-0341.mediawiki|BIP 341]] and [[bip-0342.mediawiki|BIP 342]] signature hashing, which requires the use of 65-byte signatures for all ANYPREVOUT modes. By introducing a new signature hash, this BIP allows the selection of a new default hashing mode specific to Tapscript 33-byte key version 1.
 
 == Specification<ref>Some text copied verbatim from [[bip-0118.mediawiki|BIP 118]].</ref> ==
 
@@ -63,9 +63,9 @@ To convert the 1-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 3
 
 To convert a 33-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 340]], remove the <code>0x01</code> prefix and use the remaining 32 bytes.
 
-==== Signature message ====
+==== Template message ====
 
-We define the function ''TemplateMsg(hash_type, for_sig)'' which computes the message being signed as a byte array.
+We define the function ''TemplateMsg(hash_type, for_sig)'' which computes the template message as a byte array.
 
 The parameter ''hash_type'' is an 8-bit unsigned value.
 
@@ -73,7 +73,7 @@ If ''hash_type & 0x03'' equals ''0x01'' and there is not an output corresponding
 
 If ''hash_type & 0xfc'' does not equal ''0x00'', ''0x04'', ''0x08, ''0x0c'', ''0x40'', ''0x44'', ''0x48'', ''0x4c'', ''0x80'', ''0x84'', or ''0x88'', fail.
 
-The parameter ''for_sig'' is a boolean where ''true'' indicates that the message will be hashed for signature validation.
+The parameter ''for_sig'' is a boolean where ''true'' indicates that the template message will be used in signature validation.
 
 If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is the contatenation of the following data, in order (with byte size of each item listed in parentheses). Numerical values in 2, 4, or 8-byte are encoded in little-endian.
 
@@ -148,7 +148,7 @@ The validation of <code>OP_CHECKTEMPLATEVERIFY</code> is modified as follows:
 ** Let ''check_hash = check_item[0:32]''
 ** Let ''hash_type = check_item[32]''
 ** If ''hash_type'' equals ''0'', fail.
-** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''<ref>'''Why is this not a tagged hash?''' See [[bip-0119.mediawiki|BIP119]]'s discussion of this topic. With 33-byte hashes, each hash type is identified by the ''hash_type'' value (or lack thereof) committed to.</ref>
+** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''<ref>'''Why is this not a tagged hash?''' See [[bip-0119.mediawiki|BIP119]]'s discussion of this topic. With 33-byte hashes, each hash type is identified by the ''hash_type'' committed to.</ref>
 ** If ''template_hash'' does not equal ''check_hash'', fail.
 
 ==== What is hashed? ====
