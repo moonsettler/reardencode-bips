@@ -63,6 +63,22 @@ To convert the 1-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 3
 
 To convert a 33-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 340]], remove the <code>0x01</code> prefix and use the remaining 32 bytes.
 
+==== Rules for <code>OP_CHECKTEMPLATEVERIFY</code> ====
+
+The validation of <code>OP_CHECKTEMPLATEVERIFY</code> is modified as follows:
+
+* If there is not at least one element on the stack, fail.
+* If the top element on the stack is not 32 or 33-bytes long, NOP.
+* If the top element on the stack is 32-bytes long:
+** If the DefaultCheckTemplateVerifyHash does not equal the top stack element, fail.
+* Else: (33-byte stack element)
+** Let ''check_item = stack_top()''
+** Let ''check_hash = check_item[0:32]''
+** Let ''hash_type = check_item[32]''
+** If ''hash_type'' equals ''0'', fail.
+** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''<ref>'''Why is this not a tagged hash?''' See [[bip-0119.mediawiki|BIP119]]'s discussion of this topic. With 33-byte hashes, each hash type is identified by the ''hash_type'' committed to.</ref>
+** If ''template_hash'' does not equal ''check_hash'', fail.
+
 ==== Template message ====
 
 We define the function ''TemplateMsg(hash_type, for_sig)'' which computes the template message as a byte array.
@@ -134,22 +150,6 @@ To verify a signature ''sig'' for a template public key ''p'':
 * Otherwise, fail.
 
 ''Verify'' is as defined in [[bip-0340.mediawiki|BIP 340]].
-
-==== Rules for <code>OP_CHECKTEMPLATEVERIFY</code> ====
-
-The validation of <code>OP_CHECKTEMPLATEVERIFY</code> is modified as follows:
-
-* If there is not at least one element on the stack, fail.
-* If the top element on the stack is not 32 or 33-bytes long, NOP.
-* If the top element on the stack is 32-bytes long:
-** If the DefaultCheckTemplateVerifyHash does not equal the top stack element, fail.
-* Else: (33-byte stack element)
-** Let ''check_item = stack_top()''
-** Let ''check_hash = check_item[0:32]''
-** Let ''hash_type = check_item[32]''
-** If ''hash_type'' equals ''0'', fail.
-** Let ''template_hash = SHA256(TemplateMsg(hash_type, false))''<ref>'''Why is this not a tagged hash?''' See [[bip-0119.mediawiki|BIP119]]'s discussion of this topic. With 33-byte hashes, each hash type is identified by the ''hash_type'' committed to.</ref>
-** If ''template_hash'' does not equal ''check_hash'', fail.
 
 ==== What is hashed? ====
 
