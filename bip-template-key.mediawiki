@@ -204,7 +204,7 @@ Modes ''0x08'', ''0x0c'', ''0x48'', ''0x4c'', and ''0x88'' do not work with <cod
 
 Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIFY</code> which is a bit of an odd behavior, but enables a hash mode that constrains all other inputs’ without incurring quadratic hashing. Because such a mode could only ever be used on one input to a transaction, constraining it to input 0 seems a reasonable solution.
 
-==== Comparison to [[bip-0341.mediawiki|BIP341]], [[bip-0342.mediawiki|BIP342]], and [[bip-0118.mediawiki|BIP118]] sighash modes ====
+==== Comparison to BIP341, BIP342, and BIP118 sighash modes ====
 
 {|
 ! sighash mode !! value !! similar template mode
