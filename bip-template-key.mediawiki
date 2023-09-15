@@ -231,11 +231,11 @@ Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIF
 | ''0x01''
 | ''0x0c''
 |-
-| ''SIGHASH_ALL|SIGHASH_SINGLE''
+| ''SIGHASH_ALL<nowiki>|</nowiki>SIGHASH_SINGLE''
 | ''0x03''
 | ''0x0d''
 |-
-| ''SIGHASH_ALL|SIGHASH_NONE''
+| ''SIGHASH_ALL<nowiki>|</nowiki>SIGHASH_NONE''
 | ''0x02''
 | ''0x0e''
 |-
@@ -243,11 +243,11 @@ Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIF
 | ''0x81''
 | ''0x4c''
 |-
-| ''SIGHASH_ANYONECANPAY|SIGHASH_SINGLE''
+| ''SIGHASH_ANYONECANPAY<nowiki>|</nowiki>SIGHASH_SINGLE''
 | ''0x83''
 | ''0x4d''
 |-
-| ''SIGHASH_ANYONECANPAY|SIGHASH_NONE''
+| ''SIGHASH_ANYONECANPAY<nowiki>|</nowiki>SIGHASH_NONE''
 | ''0x82''
 | ''0x4e''
 |-
@@ -255,11 +255,11 @@ Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIF
 | ''0x41''
 | ''0x48''
 |-
-| ''SIGHASH_ANYPREVOUT|SIGHASH_SINGLE''
+| ''SIGHASH_ANYPREVOUT<nowiki>|</nowiki>SIGHASH_SINGLE''
 | ''0x43''
 | ''0x49''
 |-
-| ''SIGHASH_ANYPREVOUT|SIGHASH_NONE''
+| ''SIGHASH_ANYPREVOUT<nowiki>|</nowiki>SIGHASH_NONE''
 | ''0x42''
 | ''0x4a''
 |-
@@ -267,11 +267,11 @@ Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIF
 | ''0xc1''
 | ''0x44''
 |-
-| ''SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_SINGLE''
+| ''SIGHASH_ANYPREVOUTANYSCRIPT<nowiki>|</nowiki>SIGHASH_SINGLE''
 | ''0xc3''
 | ''0x45''
 |-
-| ''SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_NONE''
+| ''SIGHASH_ANYPREVOUTANYSCRIPT<nowiki>|</nowiki>SIGHASH_NONE''
 | ''0xc2''
 | ''0x46''
 |}
