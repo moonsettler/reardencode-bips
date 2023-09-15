@@ -223,6 +223,10 @@ Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIF
 ! value
 ! similar template mode
 |-
+| ''SIGHASH_DEFAULT
+| ''0x00''
+| ''0x0c''
+|-
 | ''SIGHASH_ALL
 | ''0x01''
 | ''0x0c''
