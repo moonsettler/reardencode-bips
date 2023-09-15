@@ -175,41 +175,29 @@ If ''for_sig'' is ''true'', the Taproot annex and spend type are hashed.
 We define the following ''template_tx_mode'' hashing modes.
 
 {|
-! template_tx_mode
-! included data
+! template_tx_mode !! included data
 |-
-| 0x00
-| nInputs, index, locktime, scriptsigs, and all sequences (with ''template_output_mode = 0'' and ''for_sig = false'', identical to [https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki BIP119])
+| 0x00 || nInputs, index, locktime, scriptsigs, and all sequences (with ''template_output_mode = 0'' and ''for_sig = false'', identical to [https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki BIP119])
 |-
-| 0x04
-| ''0x00'' without locktime, scriptsigs, and all sequences.
+| 0x04 || ''0x00'' without locktime, scriptsigs, and all sequences.
 |-
-| 0x08
-| ''0x00'' with all prevscripts and spendscript
+| 0x08 || ''0x00'' with all prevscripts and spendscript
 |-
-| 0x0c
-| ''0x08'' with all prevouts
+| 0x0c || ''0x08'' with all prevouts
 |-
-| 0x40
-| -
+| 0x40 || -
 |-
-| 0x44
-| locktime and this sequence (similar to BIP118 ''0xc?'')
+| 0x44 || locktime and this sequence (similar to BIP118 ''0xc?'')
 |-
-| 0x48
-| ''0x44'' with this prevscript and spendscript (similar to BIP118 ''0x4?'')
+| 0x48 || ''0x44'' with this prevscript and spendscript (similar to BIP118 ''0x4?'')
 |-
-| 0x4c
-| ''0x48'' with this prevout
+| 0x4c || ''0x48'' with this prevout
 |-
-| 0x80
-| ''0x00'' with all but input 0's prevscript
+| 0x80 || ''0x00'' with all but input 0's prevscript
 |-
-| 0x84
-| ''0x80'' with all but input 0's prevout
+| 0x84 || ''0x80'' with all but input 0's prevout
 |-
-| 0x88
-| ''0x08'' with all but input 0's prevout
+| 0x88 || ''0x08'' with all but input 0's prevout
 |}
 
 Modes ''0x08'', ''0x0c'', ''0x48'', ''0x4c'', and ''0x88'' do not work with <code>OP_CHECKTEMPLATEVERIFY</code>, as they would create a hash cycle.
@@ -219,61 +207,33 @@ Modes ''0x80'' and ''0x84'' only work on input 0 for <code>OP_CHECKTEMPLATEVERIF
 ==== Comparison to [[bip-0341.mediawiki|BIP341]], [[bip-0342.mediawiki|BIP342]], and [[bip-0118.mediawiki|BIP118]] sighash modes ====
 
 {|
-! sighash mode
-! value
-! similar template mode
+! sighash mode !! value !! similar template mode
 |-
-| ''SIGHASH_DEFAULT
-| ''0x00''
-| ''0x0c''
+| ''SIGHASH_DEFAULT || ''0x00'' || ''0x0c''
 |-
-| ''SIGHASH_ALL
-| ''0x01''
-| ''0x0c''
+| ''SIGHASH_ALL || ''0x01'' || ''0x0c''
 |-
-| ''SIGHASH_ALL<nowiki>|</nowiki>SIGHASH_SINGLE''
-| ''0x03''
-| ''0x0d''
+| ''SIGHASH_ALL<nowiki>|</nowiki>SIGHASH_SINGLE'' || ''0x03'' || ''0x0d''
 |-
-| ''SIGHASH_ALL<nowiki>|</nowiki>SIGHASH_NONE''
-| ''0x02''
-| ''0x0e''
+| ''SIGHASH_ALL<nowiki>|</nowiki>SIGHASH_NONE'' || ''0x02'' || ''0x0e''
 |-
-| ''SIGHASH_ANYONECANPAY''
-| ''0x81''
-| ''0x4c''
+| ''SIGHASH_ANYONECANPAY'' || ''0x81'' || ''0x4c''
 |-
-| ''SIGHASH_ANYONECANPAY<nowiki>|</nowiki>SIGHASH_SINGLE''
-| ''0x83''
-| ''0x4d''
+| ''SIGHASH_ANYONECANPAY<nowiki>|</nowiki>SIGHASH_SINGLE'' || ''0x83'' || ''0x4d''
 |-
-| ''SIGHASH_ANYONECANPAY<nowiki>|</nowiki>SIGHASH_NONE''
-| ''0x82''
-| ''0x4e''
+| ''SIGHASH_ANYONECANPAY<nowiki>|</nowiki>SIGHASH_NONE'' || ''0x82'' || ''0x4e''
 |-
-| ''SIGHASH_ANYPREVOUT''
-| ''0x41''
-| ''0x48''
+| ''SIGHASH_ANYPREVOUT'' || ''0x41'' || ''0x48''
 |-
-| ''SIGHASH_ANYPREVOUT<nowiki>|</nowiki>SIGHASH_SINGLE''
-| ''0x43''
-| ''0x49''
+| ''SIGHASH_ANYPREVOUT<nowiki>|</nowiki>SIGHASH_SINGLE'' || ''0x43'' || ''0x49''
 |-
-| ''SIGHASH_ANYPREVOUT<nowiki>|</nowiki>SIGHASH_NONE''
-| ''0x42''
-| ''0x4a''
+| ''SIGHASH_ANYPREVOUT<nowiki>|</nowiki>SIGHASH_NONE'' || ''0x42'' || ''0x4a''
 |-
-| ''SIGHASH_ANYPREVOUTANYSCRIPT''
-| ''0xc1''
-| ''0x44''
+| ''SIGHASH_ANYPREVOUTANYSCRIPT'' || ''0xc1'' || ''0x44''
 |-
-| ''SIGHASH_ANYPREVOUTANYSCRIPT<nowiki>|</nowiki>SIGHASH_SINGLE''
-| ''0xc3''
-| ''0x45''
+| ''SIGHASH_ANYPREVOUTANYSCRIPT<nowiki>|</nowiki>SIGHASH_SINGLE'' || ''0xc3'' || ''0x45''
 |-
-| ''SIGHASH_ANYPREVOUTANYSCRIPT<nowiki>|</nowiki>SIGHASH_NONE''
-| ''0xc2''
-| ''0x46''
+| ''SIGHASH_ANYPREVOUTANYSCRIPT<nowiki>|</nowiki>SIGHASH_NONE'' || ''0xc2'' || ''0x46''
 |}
 
 == Discussion ==
