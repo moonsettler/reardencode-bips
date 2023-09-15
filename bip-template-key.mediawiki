@@ -159,10 +159,10 @@ We define the following input related data elements:
 
 * may be included for any input
 ** ''prevout'':
-** ''prevscript'': output amount and script
+** ''prevscript'': previout output amount and previous output script
 ** ''sequence'':
 * only from the input being validated
-** ''script'': control block<ref>Without the control block, a transaction with 2 identical script paths may be [https://github.com/bitcoin-inquisition/bitcoin/issues/19 malleated] after signing.</ref>, leaf script, and code separator position
+** ''spendscript'': control block<ref>Without the control block, a transaction with 2 identical script paths may be [https://github.com/bitcoin-inquisition/bitcoin/issues/19 malleated] after signing.</ref>, leaf script, and code separator position
 ** ''annex'': taproot spend type and annex
 ** ''index'': the input index, with the first input having index 0
 * only for all inputs if present:
@@ -185,7 +185,7 @@ We define the following ''template_tx_mode'' hashing modes.
 | ''0x00'' without locktime, scriptsigs, and all sequences.
 |-
 | 0x08
-| ''0x00'' with all prevscripts and script
+| ''0x00'' with all prevscripts and spendscript
 |-
 | 0x0c
 | ''0x08'' with all prevouts
@@ -197,7 +197,7 @@ We define the following ''template_tx_mode'' hashing modes.
 | locktime and this sequence (similar to BIP118 ''0xc?'')
 |-
 | 0x48
-| ''0x44'' with this prevscript and script (similar to BIP118 ''0x4?'')
+| ''0x44'' with this prevscript and spendscript (similar to BIP118 ''0x4?'')
 |-
 | 0x4c
 | ''0x48'' with this prevout
