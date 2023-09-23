@@ -1,7 +1,7 @@
 <pre>
   BIP: TBD
   Layer: Consensus (soft fork)
-  Title: Template Hash
+  Title: Template Key
   Author: Brandon Black <freedom@reardencode.com>
   Status: Draft
   Type: Standards Track
