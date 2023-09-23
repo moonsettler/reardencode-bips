@@ -13,9 +13,9 @@
 
 == Introduction ==
 
-== Abstract ==
+=== Abstract ===
 
-This BIP describes a new set of hashing modes corresponding to a new type of public key for tapscript ([[bip-0342.mediawiki|BIP 342]]) transactions. It additionally defines a virtual public key for use in tapscript, corresponding to the taproot internal key used with these new hashing modes.
+This BIP describes a new set of hashing modes corresponding to a new type of public key for tapscript ([[bip-0342.mediawiki|BIP 342]]) transactions. It defines a virtual public key for use in tapscript, corresponding to the taproot internal key used with these new hashing modes.
 
 Many of the hashing modes defined in this BIP do not commit to the previous outpoint being spent, enabling dynamic binding of the signed transaciton to different UTXOs providing the other hashed parts of the transaction match.
 
@@ -27,23 +27,25 @@ This document is licensed under the 3-clause BSD license.
 
 === Motivation ===
 
-The motivation for this BIP is inclusive of the motivation for [[bip-0118.mediawiki|BIP 118]]. Additionally, there has been much discussion of pre-signed output covenants based on [[bip-0118.mediawiki|BIP 118]] signatures and by explicitly adding the hashing modes introduced in this BIP to [[bip-0119.mediawiki|BIP 119]] these same covenants are enabled with far fewer witness bytes.
+The motivation for this BIP is inclusive of the motivation for [[bip-0118.mediawiki|BIP 118]].
 
 The specific design of these hashing modes has been influenced by conversations with James O'Beirne, Greg Sanders, @4moonsettler, Burak Keçeli, Super Testnet, and others. See this [https://lists.linuxfoundation.org/pipermail/bitcoin-dev/2023-August/021907.html mailing list thread], and [https://delvingbitcoin.org/t/combined-ctv-apo-into-minimal-txhash-csfs/60/8 this post on Delving Bitcoin] for some additional context.
 
 To summarize some of the considerations that have gone into these hashing modes:
 
-* While much ado has been made about the recursive covenants enabled by [[bip-0118.mediawiki|BIP 118]], the recursion enabled is limited to movement between pre-defined states, and only possible using a trusted setup ceremony with deleted keys. These constructions are therefore primarily of academic interest, and do not represent a way to alter the execution flow or incentive model of bitcoin.
-* While Jeremy Rubin has written about the future need for a transaction-external fee payment mechanism for bitcoin transactions (fee accounts, transaction sponsors, etc.); any such proposal is many years away. In the meantime, partial transaction input/output hashing can allow for transaction-internal fees to be added within many proposed protocols.
-* A signature hash that allows rebinding of only one transaction input while fixing one or more others can further enable off-chain protocols.
-** Allowing this in general would create quadratic hashing, so this BIP limits such rebindable single input hashes to the first transaction input, adding only linear hashing in the worst case.
+* Because [[bip-0118.mediawiki|BIP 118]] <code>ANYPREVOUTANYSCRIPT(APOAS)</code> does not commit to the previout outpoint or script, it can also be used to produce a template covenant by placing a signature in the locking script (<code>APOAS|ALL</code> is similar to [[bip-0119.mediawiki|BIP 119]] DefaultCheckTemplateVerifyHash, but does not commit to sufficient data to produce predictable txids for subsequent transactions. See [https://gist.github.com/reardencode/2aa98700b720174598d21989dd46e781#what-is-hashed this table]). This type of covenant is an unavoidable property of fully re-bindable signatures as required for [https://github.com/instagibbs/bolts/blob/eltoo_draft/XX-eltoo-transactions.md LN Symmetry]. By extending [[bip-0119.mediawiki|BIP 119]] to include the hash modes introduced in this BIP, we deliberately support these covenants with far fewer witness bytes.
+* Much ado has been made about the recursive covenants enabled by [[bip-0118.mediawiki|BIP 118]]. The recursion enabled is limited to movement between pre-defined states, and only possible using a trusted setup ceremony with deleted keys. These constructions are therefore primarily of academic interest, and do not represent a way to alter the execution flow or incentive model of bitcoin.
+* Jeremy Rubin has written about the future need for a transaction-external fee payment mechanism for bitcoin transactions (fee accounts, transaction sponsors, etc.); any such proposal is many years away. In the meantime, partial transaction input/output hashing can allow for transaction-internal fees to be added within many proposed protocols.
+* A signature hash that allows rebinding of one or more transaction inputs while fixing one or more others can further enable off-chain protocols.
+** Allowing this in general would create quadratic hashing, so this BIP only allows the first transaction input to be rebindable with all others fixed; adding only linear hashing in the worst case.
+** This could also potentially reduced sufficiently by limiting the number of possible combinations, but this would be more difficult to reason about.
 * One of the limitations of [[bip-0118.mediawiki|BIP 118]] is that it extends the existing [[bip-0341.mediawiki|BIP 341]] and [[bip-0342.mediawiki|BIP 342]] signature hashing, which requires the use of 65-byte signatures for all ANYPREVOUT modes. By introducing a new signature hash, this BIP allows the selection of a new default hashing mode specific to Tapscript 33-byte key version 1.
+** The default signature mode selected is analogous to [[bip-0119.mediawiki|BIP 119]] DefaultCheckTemplateVerifyHash.
 
-== Specification<ref>Some text copied verbatim from [[bip-0118.mediawiki|BIP 118]].</ref> ==
+== Specification<ref>Some text copied from [[bip-0118.mediawiki|BIP 118]].</ref> ==
 
 This BIP modifies the behaviour of the [[bip-0342.mediawiki|BIP 342]] signature opcodes<ref>'''What about key path spends?'''
-This proposal only supports template signatures via script path spends, and does not support template signatures for key path spends.
-This is for two reasons: first, not supporting key path spends allows this proposal to be independent of the core changes included in [[bip-0341.mediawiki|BIP 341]] and [[bip-0342.mediawiki|BIP 342]]; second, it allows addresses to use template signature hashing while remaining indistinguishable prior to being spent.
+These new signature modes could also be supported on key path spends (by encumbering SegWit v1 33-byte keys), but this would make such outputs distinct in the output set from other SegWit v1 outputs. With the ability to use these modes with the taproot internal key, the total round-trip cost difference between key path and script is 7.75vB. Extending keypath can be done with a separate BIP.
 </ref> (<code>CHECKSIG</code>, <code>CHECKSIGVERIFY</code>, and <code>CHECKSIGADD</code>) for public keys that have a length of 33 bytes and a first byte of <code>0x01</code> or the public key which is precisely the single byte vector <code>0x01</code><ref>'''Use of 0x01 public key type'''
 Because <code>OP_0</code> leaves an empty vector on the stack it would not satisfy [[bip-0342.mediawiki|BIP 342]]'s rules for unknown public key types. As such, it is convenient to use one of <code>OP_1..OP_16</code> or <code>OP_1NEGATE</code> as a way to reference the taproot internal key.
 To keep things as simple as possible, we use the first of these, and add the same byte as a prefix to allow ANYPREVOUT signatures for explicitly specified keys.
@@ -57,11 +59,21 @@ The [[bip-0342.mediawiki|BIP 342]] rules for signature opcodes are modified by r
 * If the public key is the single byte <code>0x01</code>, or if the public key is 33 bytes and the first byte of the public key is <code>0x01</code>, it is considered to be a template public key:
 ** If the signature is not the empty vector, the signature is validated according to the [[bip-0341.mediawiki|BIP 341]] signing validation rules with the public key, allowable <code>hash_type</code> values, and transaction digest modified as defined below.
 
-==== Public key ====
+===== Public key =====
 
-To convert the 1-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 340]], use the 32-byte taproot internal key, <code>p</code>, as defined in [[bip-0341.mediawiki|BIP 341]].
+To convert the 1-byte Template public key for use with [[bip-0340.mediawiki|BIP 340]], use the 32-byte taproot internal key, <code>p</code>, as defined in [[bip-0341.mediawiki|BIP 341]].
 
-To convert a 33-byte BIP 118 public key for use with [[bip-0340.mediawiki|BIP 340]], remove the <code>0x01</code> prefix and use the remaining 32 bytes.
+To convert a 33-byte Template public key for use with [[bip-0340.mediawiki|BIP 340]], remove the <code>0x01</code> prefix and use the remaining 32 bytes.
+
+===== Signature verification =====
+
+To verify a signature ''sig'' for a template public key ''p'':
+
+* If the ''sig'' is 64 bytes long, return ''Verify(p, hash<sub>TapSigHash</sub>(0x01<ref>'''Why is the hash prefixed with 0x01?''' To indicate that this is a distinct signature hashing epoch.</ref> || TemplateMsg(0x00, true)), sig)''
+* If the ''sig'' is 65 bytes long, return ''sig[64] &ne; 0x00 and Verify(p, hash<sub>TapSighash</sub>(0x01 || TemplateMsg(sig[64], true)), sig[0:64])''.
+* Otherwise, fail.
+
+''Verify'' is as defined in [[bip-0340.mediawiki|BIP 340]].
 
 ==== Rules for <code>OP_CHECKTEMPLATEVERIFY</code> ====
 
@@ -94,7 +106,9 @@ The parameter ''for_sig'' is a boolean where ''true'' indicates that the templat
 If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is the contatenation of the following data, in order (with byte size of each item listed in parentheses). Numerical values in 2, 4, or 8-byte are encoded in little-endian.
 
 * Control:
-** ''hash_type'' (1).
+** ''hash_type'' (1)<ref>Use as DefaultCheckTemplateVerifyHash:
+There is no ''hash_type'' in the DefaultCheckTemplateVerifyHash, so if this specification is to be used to fully replace [[bip-0119.mediawiki|BIP 119]]'s hash function, we can drop this byte if it's zero and ''for_sig'' is false; or we can modify BIP 119 to include a 0-byte.
+</ref>.
 * Transaction data:
 ** ''nVersion'' (4): the ''nVersion'' of the transaction.
 ** If ''template_tx_mode'' is not equal to ''0x04'' or ''0x40'':
@@ -142,14 +156,6 @@ If the parameters take acceptable values, ''TemplateMsg(hash_type, for_sig)'' is
 * Data about this output:
 ** If ''template_output_mode'' equals ''0x01'':
 *** ''sha_single_output'' (32): the SHA256 of the corresponding output in <code>CTxOut</code> format.
-
-To verify a signature ''sig'' for a template public key ''p'':
-
-* If the ''sig'' is 64 bytes long, return ''Verify(p, hash<sub>TapSigHash</sub>(0x00 || TemplateMsg(0x00, true)), sig)''
-* If the ''sig'' is 65 bytes long, return ''sig[64] &ne; 0x00 and Verify(p, hash<sub>TapSighash</sub>(0x01<ref>'''Why is the hash prefixed with 0x01?''' To indicate that this is a distinct signature hashing epoch.</ref> || TemplateMsg(sig[64], true)), sig[0:64])''.
-* Otherwise, fail.
-
-''Verify'' is as defined in [[bip-0340.mediawiki|BIP 340]].
 
 ==== What is hashed? ====
 
