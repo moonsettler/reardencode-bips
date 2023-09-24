@@ -48,7 +48,7 @@ This BIP modifies the behaviour of the [[bip-0342.mediawiki|BIP 342]] signature 
 These new signature modes could also be supported on key path spends (by encumbering SegWit v1 33-byte keys), but this would make such outputs distinct in the output set from other SegWit v1 outputs. With the ability to use these modes with the taproot internal key, the total round-trip cost difference between key path and script is 7.75vB. Extending keypath can be done with a separate BIP.
 </ref> (<code>CHECKSIG</code>, <code>CHECKSIGVERIFY</code>, and <code>CHECKSIGADD</code>) for public keys that have a length of 33 bytes and a first byte of <code>0x01</code> or the public key which is precisely the single byte vector <code>0x01</code><ref>'''Use of 0x01 public key type'''
 Because <code>OP_0</code> leaves an empty vector on the stack it would not satisfy [[bip-0342.mediawiki|BIP 342]]'s rules for unknown public key types. As such, it is convenient to use one of <code>OP_1..OP_16</code> or <code>OP_1NEGATE</code> as a way to reference the taproot internal key.
-To keep things as simple as possible, we use the first of these, and add the same byte as a prefix to allow ANYPREVOUT signatures for explicitly specified keys.
+To keep things as simple as possible, we use the first of these, and add the same byte as a prefix to allow Template key signatures for explicitly specified keys.
 </ref>.
 These keys are termed '''Template public keys'''.
 
