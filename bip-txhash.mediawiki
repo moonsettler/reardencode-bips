@@ -19,7 +19,7 @@ in tapscript only.
 
 These opcodes provide a generalized method for introspecting certain details of
 the spending transaction, which enables non-interactive enforcement of certain
-properties of the transaction spending a certain UTXO.
+properties of the transaction spending a UTXO so locked.
 
 The constructions specified in this BIP also open up the way for other
 potential updates; see Motivation section for more details.
