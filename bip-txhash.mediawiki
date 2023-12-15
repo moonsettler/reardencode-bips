@@ -48,91 +48,235 @@ OP_TXHASH does the following:
 * The 32-byte TxHash of the transaction at the current input index, calculated using the given TxFieldSelector is pushed onto the stack.
 
 
-The TxFieldSelector has the following semantics. We will give a brief conceptual
-summary, followed by a reference implementation of the CalculateTxHash function.
+The TxFieldSelector is comprised of between 0 and 64 bytes and allows for
+granular selection of nearly any aspect of the transaction being verified for
+hashing.
 
-* There are two special cases for the TxFieldSelector:
-** the empty value, zero bytes long: it is set equal to TXFS_SPECIAL_TEMPLATE, the de-facto default value which means everything except the prevouts and the prevout scriptPubkeys.
-TXFS_SPECIAL_TEMPLATE is 4 bytes long, as follows:
-# TXFS_ALL
-# TXFS_INPUTS_TEMPLATE | TXFS_OUTPUTS_ALL
-# TXFS_INOUT_NUMBER | TXFS_INOUT_SELECTION_ALL
-# TXFS_INOUT_NUMBER | TXFS_INOUT_SELECTION_ALL
-** the 0x00 byte: it is set equal to TXFS_SPECIAL_ALL, which means "ALL" and is primarily useful to emulate SIGHASH_ALL when OP_TXHASH is used in combination with OP_CHECKSIGFROMSTACK.
-TXFS_SPECIAL_TEMPLATE is 4 bytes long, as follows:
-# TXFS_ALL
-# TXFS_INPUTS_ALL | TXFS_OUTPUTS_ALL
-# TXFS_INOUT_NUMBER | TXFS_INOUT_SELECTION_ALL
-# TXFS_INOUT_NUMBER | TXFS_INOUT_SELECTION_ALL
+TxFieldSelectors of 0 and 1 byte represent pre-defined modes that closely
+resemeble other known transaction hashes (specifically BIP119's
+DefaultCheckTemplateVerifyHash, BIP341/BIP342's signature hashes, and BIP118's
+signature hashes). The current set of pre-defined modes is very much a draft.
 
-* The first byte of the TxFieldSelector has its 8 bits assigned as follows, from lowest to highest:
-# version (TXFS_VERSION)
-# locktime (TXFS_LOCKTIME)
-# current input index (TXFS_CURRENT_INPUT_IDX)
-# current input control block (or empty) (TXFS_CURRENT_INPUT_CONTROL_BLOCK)
-# current script last OP_CODESEPARATOR position (or 0xffffffff) (TXFS_CURRENT_INPUT_LAST_CODESEPARATOR_POS)
-# inputs (TXFS_INPUTS)
-# outputs (TXFS_OUTPUTS)
+In TxFieldSelectors of 2 or more bytes, the first byte represents general
+transaction fields, fields specific to the input being validated, and specifies
+whether input/output fields will be individually selected or set to a default.
+The default fields from inputs and outputs are the same as those hashed in
+BIP341/BIP342 signature hashing.
 
-* The last (highest) bit of the first byte (TXFS_CONTROL), we will call the "control bit", and it can be used to control the behavior of the opcode. For OP_TXHASH and OP_CHECKTXHASHVERIFY, the control bit is used to determine whether the TxFieldSelector itself has to be included in the resulting hash.  (For potential other uses of the TxFieldSelector (like a hypothetical OP_TX), this bit can be repurposed.)
+If specific input and output fields selection is specified by the first byte,
+the second byte allows selection of fields commonly included in BIP341/342
+signature hashes for inputs other than the one being validated, and their
+taproot annex.
 
-* If either "inputs" or "outputs" is set to 1, expect another byte with its 8 bits assigning the following variables, from lowest to highest:
-** Specifying which fields of the inputs will be selected:
-# prevouts (TXFS_INPUTS_PREVOUTS)
-# sequences (TXFS_INPUTS_SEQUENCES)
-# scriptSigs (TXFS_INPUTS_SCRIPTSIGS)
-# prevout scriptPubkeys (TXFS_INPUTS_PREV_SCRIPTPUBKEYS)
-# prevout values (TXFS_INPUTS_PREV_VALUED)
-# taproot annexes (TXFS_INPUTS_TAPROOT_ANNEXES)
-** Specifying which fields of the outputs will be selected:
-# scriptPubkeys (TXFS_OUTPUTS_SCRIPTPUBKEYS)
-# values (TXFS_OUTPUTS_VALUES)
+The next byte of the TxFieldSelector (required as byte 2 if no input/output
+selections are made, or optional as byte 3 if input/output field selections are
+made) specifies whether the number of inputs/outputs is selected, whether a
+subtotal of values from the selected inputs/outputs is selected, and defines
+the method of selecting inputs/outputs. Four input/output selection modes are
+defined: corresponding (similar to SINGLE), leading, exclude trailing, and
+individual. If the input/output selection byte is omitted, it selects all
+inputs if any input bit is set in the input/output field selection and none
+otherwise, and selects all outputs if any output bit is set in the input/output
+field selection and none otherwise.
 
-//TODO(stevenroose) check that the 7 and 8 render correctly
+If leading or exclude trailing mode are selected an additional compact varint
+is read from the TxFieldSelector, first for inputs and then for outputs. If the
+end of the field selector is encountered before attempting to read the first
+byte of one of these compact varints, it is treated as zero.
 
-* We define as follows:
-** TXFS_ALL = TXFS_VERSION | TXFS_LOCKTIME | TXFS_CURRENT_INPUT_IDX | TXFS_CURRENT_INPUT_CONTROL_BLOCK | TXFS_CURRENT_INPUT_LAST_CODESEPARATOR_POS | TXFS_INPUTS | TXFS_OUTPUTS | TXFS_CONTROL
-** TXFS_INPUTS_ALL = TXFS_INPUTS_PREVOUTS | TXFS_INPUTS_SEQUENCES | TXFS_INPUTS_SCRIPTSIGS | TXFS_INPUTS_PREV_SCRIPTPUBKEYS | TXFS_INPUTS_PREV_VALUES | TXFS_INPUTS_TAPROOT_ANNEXES
-** TXFS_INPUTS_TEMPLATE = TXFS_INPUTS_SEQUENCES | TXFS_INPUTS_SCRIPTSIGS | TXFS_INPUTS_PREV_VALUES | TXFS_INPUTS_TAPROOT_ANNEXES
-** TXFS_OUTPUTS_ALL = TXFS_OUTPUTS_SCRIPTPUBKEYS | TXFS_OUTPUTS_VALUES
+If individual selection is specified for both inputs and outputs, the number of
+individual inputs is read as a compact varint from the TxFieldSelector.
 
-For both inputs and then outputs, do the following:
+The remaining bytes of the TxFieldSelector specify the individual selected
+input and output indices (inputs first) as compact varints, in ascending order.
 
-* If the "in/outputs" field is set to 1, another additional byte is expected:
-** The highest bit (TXFS_INOUT_NUMBER) indicates whether the "number of in-/outputs" should be committed to.
-** For the remaining bits, there are three exceptional values:
-*** 0x00 (TXFS_INOUT_SELECTION_NONE) means "no in/outputs" (hence only the number of them as 0x80 (TXFS_INOUT_NUMBER)).
-*** 0x40 (TXFS_INOUT_SELECTION_CURRENT) means "select only the in/output of the current input index" (it is invalid when current index exceeds number of outputs).
-*** 0x3f (TXFS_INOUT_SELECTION_ALL) means "select all in/outputs".
-** The second highest bit (TXFS_INOUT_SELECTION_MODE) is the "specification mode":
-*** Set to 0 it means "leading mode".
-*** Set to 1 it means "individual mode".
-** The third highest bit (TXFS_INOUT_SELECTION_SIZE) is used to indicate the "index size", i.e. the number of bytes will be used to represent in/output indices.
-** In "leading mode",
-*** With "index size" set to 0, the remaining lowest 5 bits of the first byte will be interpreted as the number of leading in/outputs to select.
-*** With "index size" set to 1, the remaining lowest 5 bits of the first byte together with the 8 bits of the next byte will be interpreted as the number of leading in/outputs to select.
-** In "individual mode", the remaining lowest 5 bits of the first byte will be interpreted as `n`, the number of individual in/outputs to select.
-*** With "index size" set to 0, interpret the following `n` individual bytes as the indices of an individual in/outputs to select.
-*** With "index size" set to 1, interpret the next `n` pairs of two bytes as the indices of individual in/outputs to select.
-
-Effectively, this allows a user to select
+This allows a user to select
 * all in/outputs
-* the current input index
-* the leading in/outputs up to 8192
-* up to 32 individually selected in/outputs
+* no in/outputs
+* the current input (and/or its corresponding output)
+* any number of leading in/outputs (including by excluding any number of trailing in/outputs)
+* up to 61 individual in/outputs (exact number depending on whether their indices can be represented by a 1-byte compact varint)
 
 The TxFieldSelector is invalid when
-* a byte is expected but missing
-* additional unexpected bytes are present
-* index size is set to 1 while not being necessary
-* a leading number of individual index is selected out of bounds of the in/outputs
-* individual indices are duplicated or not in increasing order
+* it is 1-byte long and no corresponding mode is specified
+* reading any compact varint fails
+* fewer individual input indices are available than requested
+* a leading or trailing index, or individual index is selected out of bounds of the in/outputs
+* individual in/output indices are duplicated or not in increasing order
+* individual in/output mode is selected but no indices are specified
+* any in/outputs are selected when no corresponding in/output fields are selected
+* no in/outputs are selected when any corresponding in/output fields are selected
 
 These limitations are to avoid potential TxFieldSelector malleability. It is
 however allowed to use leading mode where it could be "all". This
 is important to allow for optional addition of extra inputs or outputs.
 //TODO(stevenroose) should we disallow individual that could be leading?
 
+=== Parsing TxFieldSpecifier ===
+
+We name 3 bytes of the field selector and their bits:
+
+TxFlags - always the first byte
+* 7 control<ref>The control bit is used in TXHASH(/VERIFY) to specify whether to include the TxFieldSelector itself in the hash. Other applications of the TxFieldSelector may repurpose this bit.</ref> (TXFS_CONTROL)
+* 6 version (TXFS_VERSION)
+* 5 locktime (TXFS_LOCKTIME)
+* 4 current input index (TXFS_CURRENT_INPUT_INDEX)
+* 3 current input control block or script code<ref>The first non-empty item of: control block, witness script, redeem script, scriptPubkey.</ref> (TXFS_CURRENT_INPUT_SCRIPT)
+* 2 current script last OP_CODESEPARATOR position (or 0xffffffff) (TXFS_CURRENT_INPUT_CODESEP)
+* 1 current input annex (TXFS_CURRENT_INPUT_ANNEX)
+* 0 io flags (TXFS_IO_FLAGS)
+
+We define the byte 0xFF as TXFS_FLAGS_ALL.
+
+IOFlags - second byte if the lowest byte of TxFlags is set, otherwise absent
+* 7 prevouts (TXFS_INPUTS_PREVOUTS)
+* 6 sequences (TXFS_INPUTS_SEQUENCES)
+* 5 scriptSigs (TXFS_INPUTS_SCRIPTSIGS)
+* 4 prevout scriptPubkeys (TXFS_INPUTS_SCRIPTPUBKEYS)
+* 3 prevout values (TXFS_INPUTS_VALUES)
+* 2 taproot annexes (TXFS_INPUTS_ANNEXES)
+* 1 output scriptPubkeys (TXFS_OUTPUTS_SCRIPTPUBKEYS)
+* 0 output values (TXFS_OUTPUTS_VALUES)
+
+We define the byte 0xF8 as TXFS_INPUTS_COMMON and 0x03 as TXFS_OUTPUTS_COMMON
+
+IOSel - optional third byte if the lowest byte of TxFlags is set, otherwise required second
+* 7 numInputs (TXFS_NUM_INPUTS)
+* 6 inputTotal (TXFS_INPUTS_TOTAL)
+* 5 input selection 1
+* 4 input selection 2
+* 3 numOutputs (TXFS_NUM_OUTPUTS)
+* 2 outputTotal (TXFS_OUTPUTS_TOTAL)
+* 1 output selection 1
+* 0 output selection 2
+
+For input and output selection bits, we define the following four values:
+* 00 corresponding (TXFS_CORRESPONDING_INPUT, TXFS_CORRESPONDING_OUTPUT)
+* 01 leading (TXFS_LEADING_INPUTS, TXFS_LEADING_OUTPUTS)
+* 10 exclude trailing (TXFS_EXCLUDE_TRAILING_INPUTS, TXFS_EXCLUDE_TRAILING_OUTPUTS)
+* 11 individual (TXFS_INDIVIDUAL_INPUTS, TXFS_INDIVIDUAL_OUTPUTS)
+
+The TxFieldSelector is parsed as follows:
+
+* Fail if ''len(TxFieldSelector) > 64''
+* Let ''txfs' = 0x00'' if ''len(TxFieldSelector) = 0'', otherwise let ''txfs' = TxFieldSelector''
+* If ''len(txfs') >= 2'':
+** Let ''txfs = txfs' ''
+* Else:
+** Let ''txfs'' take its value from the following table according to the value of ''txfs' ''
+*** ''0x00 => 0x716BAA'' DefaultCheckTemplateVerifyHash<ref>'''DefaultCheckTemplateVerifyHash'''
+<br/>TXFS_VERSION|TXFS_LOCKTIME|TXFS_CURRENT_INPUT_INDEX|TXFS_IO_FLAGS
+<br/>TXFS_INPUTS_SEQUENCES|TXFS_INPUTS_SCRIPTSIGS|TXFS_INPUTS_VALUES|TXFS_OUTPUTS_SCRIPTPUBKEYS|TXFS_OUTPUTS_VALUES
+<br/>TXFS_NUM_INPUTS|TXFS_EXCLUDE_TRAILING_INPUTS|TXFS_NUM_OUTPUTS|TXFS_EXCLUDE_TRAILING_OUTPUTS</ref>
+*** ''0x01 => 0xFFFB'' SIGHASH_ALL<ref>'''SIGHASH_ALL'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SIGHASH|TXFS_OUTPUTS_SIGHASH</ref>
+*** ''0x02 => 0xFFF8'' SIGHASH_ALL|SIGHASH_NONE<ref>'''SIGHASH_ALL|SIGHASH_NONE'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SIGHASH</ref>
+*** ''0x03 => 0xFFFB20'' SIGHASH_ALL|SIGHASH_SINGLE<ref>'''SIGHASH_ALL|SIGHASH_SINGLE'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SIGHASH|TXFS_OUTPUTS_SIGHASH
+<br/>TXFS_EXCLUDE_TRAILING_INPUTS|TXFS_CORRESPONDING_OUTPUT</ref>
+*** ''0x41 => 0xFF7B02'' SIGHASH_ANYPREVOUT|SIGHASH_ALL<ref>'''SIGHASH_ANYPREVOUT|SIGHASH_ALL'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SEQUENCES|TXFS_INPUTS_SCRIPTSIGS|TXFS_INPUTS_SCRIPTPUBKEYS|TXFS_INPUTS_VALUES|TXFS_OUTPUTS_COMMON
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_EXCLUDE_TRAILING_OUTPUTS</ref>
+*** ''0x42 => 0xFF7801'' SIGHASH_ANYPREVOUT|SIGHASH_NONE<ref>'''SIGHASH_ANYPREVOUT|SIGHASH_NONE'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SEQUENCES|TXFS_INPUTS_SCRIPTSIGS|TXFS_INPUTS_SCRIPTPUBKEYS|TXFS_INPUTS_VALUES
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_LEADING_OUTPUTS</ref>
+*** ''0x43 => 0xFF7B00'' SIGHASH_ANYPREVOUT|SIGHASH_SINGLE<ref>'''SIGHASH_ANYPREVOUT|SIGHASH_SINGLE'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SEQUENCES|TXFS_INPUTS_SCRIPTSIGS|TXFS_INPUTS_SCRIPTPUBKEYS|TXFS_INPUTS_VALUES|TXFS_OUTPUTS_COMMON
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_CORRESPONDING_OUTPUT</ref>
+*** ''0x81 => 0xFFFB02'' SIGHASH_ANYONECANPAY|SIGHASH_ALL<ref>'''SIGHASH_ANYONECANPAY|SIGHASH_ALL'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SIGHASH|TXFS_OUTPUTS_SIGHASH
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_EXCLUDE_TRAILING_OUTPUTS</ref>
+*** ''0x82 => 0xFFF801'' SIGHASH_ANYONECANPAY|SIGHASH_NONE<ref>'''SIGHASH_ANYONECANPAY|SIGHASH_NONE'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SIGHASH
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_LEADING_OUTPUTS</ref>
+*** ''0x83 => 0xFFFB00'' SIGHASH_ANYONECANPAY|SIGHASH_SINGLE<ref>'''SIGHASH_ANYONECANPAY|SIGHASH_SINGLE'''
+<br/>TXFS_FLAGS_ALL
+<br/>TXFS_INPUTS_SIGHASH|TXFS_OUTPUTS_SIGHASH
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_CORRESPONDING_OUTPUT</ref>
+*** ''0xc1 => 0xFB4302'' SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_ALL<ref>'''SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_ALL'''
+<br/>TXFS_FLAGS_ALL & ~TXFS_CURRENT_INPUT_SCRIPT
+<br/>TXFS_INPUTS_SEQUENCES|TXFS_OUTPUTS_COMMON
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_EXCLUDE_TRAILING_OUTPUTS</ref>
+*** ''0xc2 => 0xFB4001'' SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_NONE<ref>'''SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_NONE'''
+<br/>TXFS_FLAGS_ALL & ~TXFS_CURRENT_INPUT_SCRIPT
+<br/>TXFS_INPUTS_SEQUENCES
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_LEADING_OUTPUTS</ref>
+*** ''0xc3 => 0xFB4300'' SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_SINGLE<ref>'''SIGHASH_ANYPREVOUTANYSCRIPT|SIGHASH_SINGLE'''
+<br/>TXFS_FLAGS_ALL & ~TXFS_CURRENT_INPUT_SCRIPT
+<br/>TXFS_INPUTS_SEQUENCES|TXFS_OUTPUTS_COMMON
+<br/>TXFS_CORRESPONDING_INPUT|TXFS_CORRESPONDING_OUTPUT</ref>
+** Otherwise fail
+* Let ''txFlags = txfs[0]''
+* If ''txFlags & TXFS_IO_FLAGS = TXFS_IO_FLAGS'':
+** Let ''ioFlags = txfs[1]''
+** If ''len(txfs) > 2'':
+*** Let ''ioSel = txfs[2]''
+** Else:
+*** Let ''iSel = TXFS_LEADING_INPUTS'' if ''ioFlags & 0xFC = 0'', otherwise let ''iSel = TXFS_EXCLUDING_TRAILING_INPUTS''
+*** Let ''oSel = TXFS_LEADING_OUTPUTS'' if ''ioFlags & 0x03 = 0'', otherwise let ''oSel = TXFS_EXCLUDING_TRAILING_OUTPUTS''
+*** Let ''ioSel = iSel | oSel''
+** nPos = 3
+* Else:
+** Let ''ioFlags = TXFS_INPUTS_COMMON | TXFS_OUTPUTS_COMMON''
+** Let ''ioSel = txfs[1]''
+** nPos = 2
+* If ''ioSel & 0x30 = TXFS_INDIVIDUAL_INPUTS'' and ''ioSel & 0x03 = TXFS_INDIVIDUAL_OUTPUTS'':
+** Fail if ''len(txfs) <= nPos''
+** Let ''nInputs = txfs[nPos]''
+** Let ''nOutputs = -1''
+** Let ''selPos = nPos + 1''
+* Else:
+** If ''len(txfs) > nPos'' and (''ioSel & 0x30 = TXFS_LEADING_INPUTS'' or ''ioSel & 0x30 = TXFS_EXCLUDE_TRAILING_INPUTS''):
+*** Let ''nOutputsPos, nInputs = readCompactVarInt(txfs, nPos)''
+** Else:
+*** Let ''nOutputsPos = nPos''
+*** Let ''nInputs = 0''
+** If ''len(txfs) > nOutputsPos'' and (''ioSel & 0x03 = TXFS_LEADING_OUTPUTS'' or ''ioSel & 0x03 = TXFS_EXCLUDE_TRAILING_OUTPUTS''):
+*** Let ''selPos, nOutputs = readCompactVarInt(txfs, nOutputsPos)''
+** Else:
+*** Let ''nOutputs = 0''
+*** Let ''selPos = nOutputsPos''
+* Fail if ''nInputs > vin'' or ''nOutputs > vout''
+* Let ''selectedIndices = readCompactVarints(TxFieldSelector, selPos)''
+* If ''ioSel & 0x30 = TXFS_INDIVIDUAL_INPUTS'' and ''ioSel & 0x03 = TXFS_INDIVIDUAL_OUTPUTS'':
+** Fail if ''len(selectedIndices) < nInputs + 1''
+** Let ''selectedInputs = selectedIndices[0..nInputs]''
+** Let ''selectedOutputs = selectedIndices[nInputs...]''
+* Else if ''ioSel & 0x30 = TXFS_INDIVIDUAL_INPUTS'':
+** Fail if ''len(selectedIndices) = 0)
+** Let ''selectedInputs = selectedIndices''
+* Else if ''ioSel & 0x03 = TXFS_INDIVIDUAL_OUTPUTS'':
+** Fail if ''len(selectedIndices) = 0)
+** Let ''selectedOutputs = selectedIndices''
+* If ''ioSel & 0x30 = TXFS_CORRESPONDING_INPUT'':
+** Let ''selectedInputs = [nIn]''
+* If ''ioSel & 0x03 = TXFS_CORRESPONDING_OUTPUT'':
+** Fail if ''nIn > vout''
+** Let ''selectedOutputs = [nIn]''
+* If ''ioSel & 0x30 = TXFS_LEADING_INPUTS''
+** Let ''selectedInputs = [0..nInputs]''
+* If ''ioSel & 0x30 = TXFS_EXCLUDE_TRAILING_INPUTS''
+** Let ''selectedInputs = [0..(vin-nInputs)]''
+* If ''ioSel & 0x03 = TXFS_LEADING_OUTPUTS''
+** Let ''selectedOutputs = [0..nOutputs]''
+* If ''ioSel & 0x03 = TXFS_EXCLUDE_TRAILING_OUTPUTS''
+** Let ''selectedOutputs = [0..(vout-nOutputs)]''
+* Fail if ''selectedInputs'' or ''selectedOutputs'' are not set
+* Fail if ''selectedInputs'' or ''selectedOutputs'' are not unique
+* Fail if ''selectedInputs'' or ''selectedOutputs'' are not in ascending order
+
+The values ''txFlags'', ''ioFlags'', and ''ioSel''; and the arrays
+''selectedInputs'', and ''selectedOutputs'' are then passed to the tx hashing
+function.
 
 ===Resource limits===
 
@@ -140,9 +284,8 @@ is important to allow for optional addition of extra inputs or outputs.
 * For tapscript, primarily motivated by the cheaper opcode OP_TXHASH (it doesn't require an additional 32 witness bytes be provided) and the potential future addition of byte manipulation opcodes like OP_CAT, an additional cost is specified per TransactionHash execution.  Using the same validation budget ("sigops budget") introduced in BIP-0342, each TransactionHash decreases the validation budget by 10.  If this brings the budget below zero, the script fails immediately.
 * The following considerations should be made:
 ** All fields that can be of arbitrary size are cachable as TransactionHash always hashes their hashed values.
-** In "individual mode", a user can at most commit 32 inputs or outputs, which we don't consider excessive for potential repeated use.
-** In "prefix mode", a caching strategy can be used where the SHA256 context is stored every N in/outputs so that multiple executions of the TransactionHash function can use the caches and only have to hash an additional N-1 items at most.
-
+** In "individual" mode, a user can at most commit 61 total inputs and/or outputs, which we don't consider excessive for potential repeated use.
+** In "leading" or "exclude trailing" mode, a caching strategy can be used where the SHA256 context is stored every N in/outputs so that multiple executions of the TransactionHash function can use the caches and only have to hash an additional N-1 items at most.
 
 ==Motivation==
 
@@ -157,13 +300,14 @@ some potential future upgrades:
 
 ===Comparing with some alternative proposals===
 
-* This proposal strictly generalizes BIP-119's OP_CHECKTEMPLATEVERIFY, as the default mode of our TxFieldSelector is effectively the same (though not byte-for-byte identical) as what OP_CTV acomplishes, without costing any additional bytes. Additionally, using OP_CHECKTXHASHVERIFY allows for more flexibility which can help in the case for
+* This proposal (nearly<ref>'''Hashing input values''' DefaultCheckTemplateVerifyHash does not hash input values as a tiny concession to awkwardly adding fees by committing to a 2-input transaction where the second input can be a specifically sized UTXO for fees. TXHASHVERIFY can enable adding fees more efficiently by committing to the necessary inputs and outputs only in ''leading'' mode.</ref>) strictly generalizes BIP-119's OP_CHECKTEMPLATEVERIFY, as the default mode of our TxFieldSelector is effectively the same (though not byte-for-byte identical) as what OP_CTV acomplishes, without costing any additional bytes. Additionally, using OP_CHECKTXHASHVERIFY allows for more flexibility which can help in the case for:
 ** enabling adding fees to a transaction without breaking a multi-tx protocol;
 ** multi-user protocols where users are only concerned about their own inputs and outputs.
 
 * Constructions like OP_IN_OUT_VALUE used with OP_EQUALVERIFY can be emulated by two OP_TXHASH instances by using the TxFieldSelector to select a single input value first and a single output value second and enforcing equality on the hashes. Neither of these alternatives can be used to enforce small value differencials without the use of 64-bit arithmetic.
 
 * Like mentioned above, SIGHASH_ANYPREVOUT can be emulated using OP_TXHASH when combined with OP_CHECKSIGFROMSTACK: `<txfs> OP_TXHASH <pubkey> OP_CHECKSIGFROMSTACK` effectively emulates SIGHASH_ANYPREVOUT.
+** By using the 1-byte pre-defined modes, this is exactly 1 WU longer than `<33-byte pubkey> OP_CHECKSIG`
 
 
 ==Detailed Specification==
@@ -178,6 +322,9 @@ implementation.
 * A proposed implementation for Bitcoin Core is available here: https://github.com/bitcoin/bitcoin/pull/29050
 * A proposed implementation for rust-bitcoin is available here: https://github.com/rust-bitcoin/rust-bitcoin/pull/2275
 
+=== Notes ===
+
+<references />
 
 ==Acknowledgement==
 
