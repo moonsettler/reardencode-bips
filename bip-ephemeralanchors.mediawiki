@@ -46,10 +46,8 @@ instead of requiring anchors to exceed dust amounts.
 
 For anchors using TRUC transactions, it's expected that they would take two output script forms:
 
-1. Keyed anchor: A key, possibly shared by multiple privileged parties, is used to encumber the anchor. This could also be `tr()`, `p2wsh()` or any
-output type that allows key material.
-1. Un-keyed anchor: `P2SH(OP_TRUE)` or `P2WSH(OP_TRUE)`, depending on the user's need for lack of txid malleability. Further policy
-extensions could allow output templates such as the output script <code>OP_1 <0x4e73></code> or a bare `OP_TRUE`.
+# Keyed anchor: A key, possibly shared by multiple privileged parties, is used to encumber the anchor. This could also be `tr()`, `p2wsh()` or any output type that allows key material.
+# Un-keyed anchor: `P2SH(OP_TRUE)` or `P2WSH(OP_TRUE)`, depending on the user's need for lack of txid malleability. Further policy extensions could allow output templates such as the output script <code>OP_1 <0x4e73></code> or a bare `OP_TRUE`.
 
 ===Example Use Cases===
 
