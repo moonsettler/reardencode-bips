@@ -46,13 +46,13 @@ It should be noted that a key disadvantage with using FROST is that participants
 
 == Specification ==
 
-=== [1] RFC Introduction ===
+=== 1. RFC Introduction ===
 
 This specification is based on the RFC-9591 specification, with some modifications provided by the BIP-327 specification. Any notable changes to the RFC-9591 specification will be highlighted.
 
 The original RFC document specifies the Flexible Round-Optimized Schnorr Threshold (FROST) signing protocol based on original work in [FROST20]. FROST requires two rounds to compute a signature. Key generation for FROST signing is out of scope for this document.
 
-=== [2] Conventions and Definitions ===
+=== 2. Conventions and Definitions ===
 
 The following notation is used throughout the document.
 
@@ -76,7 +76,7 @@ The following notation is used throughout the document.
 
 Unless otherwise stated, we assume that secrets are sampled uniformly at random using a CSPRNG; see [RFC4086] for additional guidance on the generation of random numbers.
 
-=== [3] Cryptographic Dependencies ===
+=== 3. Cryptographic Dependencies ===
 
 FROST signing depends on the following cryptographic constructs:
 
@@ -84,7 +84,7 @@ FROST signing depends on the following cryptographic constructs:
 
 * Cryptographic hash function (Section 3.2)
 
-==== [3.1] Prime-Order Group ====
+==== 3.1 Prime-Order Group ====
 
 FROST depends on an abelian group of prime order p. We represent this group as the object G that additionally defines helper functions described below. The group operation for G is addition + with identity element I. For any elements A and B of the group G, A + B = B + A is also a member of G. Also, for any A in G, there exists an element -A such that A + (-A) = (-A) + A = I. For convenience, we use - to denote subtraction, e.g., A - B = A + (-B). Integers, taken modulo the group order p, are called "Scalars"; arithmetic operations on Scalars are implicitly performed modulo p. Since p is prime, Scalars form a finite field. Scalar multiplication is equivalent to the repeated application of the group operation on an element A with itself r-1 times, denoted as ScalarMult(A, r). We denote the sum, difference, and product of two Scalars using the +, -, and * operators, respectively. (Note that this means + may refer to group element addition or Scalar addition, depending on the type of the operands.) For any element A, ScalarMult(A, p) = I. We denote B as a fixed generator of the group. Scalar base multiplication is equivalent to the repeated application of the group operation on B with itself r-1 times, denoted as ScalarBaseMult(r). The set of Scalars corresponds to GF(p), which we refer to as the Scalar field. It is assumed that group element addition, negation, and equality comparison can be efficiently computed for arbitrary group elements.
 
@@ -111,7 +111,7 @@ Maps a Scalar s to a canonical byte array buf of fixed length Ns.
 DeserializeScalar(buf):
 Attempts to map a byte array buf to a Scalar s. This function raises an error if deserialization fails; see Section 6 for group-specific input validation steps.
 
-==== [3.2] Cryptographic Hash Function ====
+==== 3.2 Cryptographic Hash Function ====
 
 FROST requires the use of a cryptographically secure hash function, generically written as H, which is modeled as a random oracle in security proofs for the protocol (see [FROST20] and [StrongerSec22]). For concrete recommendations on hash functions that SHOULD be used in practice, see Section 6. Using H, we introduce distinct domain-separated hashes H1, H2, H3, H4, and H5:
 
@@ -119,7 +119,7 @@ H1, H2, and H3 map arbitrary byte strings to Scalar elements associated with the
 H4 and H5 are aliases for H with distinct domain separators.
 The details of H1, H2, H3, H4, and H5 vary based on the ciphersuite used. See Section 6 for more details about each.
 
-=== [4] Helper Functions ===
+=== 4. Helper Functions ===
 
 Beyond the core dependencies, the protocol in this document depends on the following helper operations:
 
@@ -131,7 +131,7 @@ Group commitment computation (Section 4.5); and
 Signature challenge computation (Section 4.6).
 The following sections describe these operations in more detail.
 
-==== [4.1] Nonce Generation ====
+==== 4.1 Nonce Generation ====
 
 To hedge against a bad random number generator (RNG) that outputs predictable values, nonces are generated with the nonce_generate function by combining fresh randomness with the secret key as input to a domain-separated hash function built from the ciphersuite hash function H. This domain-separated hash function is denoted as H3. This function always samples 32 bytes of fresh randomness to ensure that the probability of nonce reuse is at most 2-128 as long as no more than 264 signatures are computed by a given signing participant.
 
@@ -140,14 +140,224 @@ Inputs:
  - secret, a Scalar.
 Outputs:
  - nonce, a Scalar.
-</pre>
 
-<syntaxhighlight lang="python" line>
 def nonce_generate(secret):
   random_bytes = random_bytes(32)
   secret_enc = G.SerializeScalar(secret)
   return H3(random_bytes || secret_enc)
-</syntaxhighlight>
+</pre>
+
+==== 4.2 Polynomials ====
+
+This section defines polynomials over Scalars that are used in the main protocol. A polynomial of maximum degree t is represented as a list of t+1 coefficients, where the constant term of the polynomial is in the first position and the highest-degree coefficient is in the last position. For example, the polynomial x2 + 2x + 3 has degree 2 and is represented as a list of three coefficients [3, 2, 1]. A point on the polynomial f is a tuple (x, y), where y = f(x).
+
+The function derive_interpolating_value derives a value that is used for polynomial interpolation. It is provided a list of x-coordinates as input, each of which cannot equal 0.
+
+<pre>
+Inputs:
+- L, the list of x-coordinates, each a NonZeroScalar.
+- x_i, an x-coordinate contained in L, a NonZeroScalar.
+
+Outputs:
+- value, a Scalar.
+
+Errors:
+- "invalid parameters", if 1) x_i is not in L, or if 2) any
+  x-coordinate is represented more than once in L.
+
+def derive_interpolating_value(L, x_i):
+  if x_i not in L:
+    raise "invalid parameters"
+  for x_j in L:
+    if count(x_j, L) > 1:
+      raise "invalid parameters"
+
+  numerator = Scalar(1)
+  denominator = Scalar(1)
+  for x_j in L:
+    if x_j == x_i: continue
+    numerator *= x_j
+    denominator *= x_j - x_i
+
+  value = numerator / denominator
+  return value
+</pre>
+
+==== 4.3 List Operations ====
+
+This section describes helper functions that work on lists of values produced during the FROST protocol. The following function encodes a list of participant commitments into a byte string for use in the FROST protocol.
+
+<pre>
+Inputs:
+- commitment_list = [(i, hiding_nonce_commitment_i,
+  binding_nonce_commitment_i), ...], a list of commitments issued by
+  each participant, where each element in the list indicates a
+  NonZeroScalar identifier i and two commitment Element values
+  (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+  MUST be sorted in ascending order by identifier.
+
+Outputs:
+- encoded_group_commitment, the serialized representation of
+  commitment_list, a byte string.
+
+def encode_group_commitment_list(commitment_list):
+  encoded_group_commitment = nil
+  for (identifier, hiding_nonce_commitment,
+       binding_nonce_commitment) in commitment_list:
+    encoded_commitment = (
+        G.SerializeScalar(identifier) ||
+        G.SerializeElement(hiding_nonce_commitment) ||
+        G.SerializeElement(binding_nonce_commitment))
+    encoded_group_commitment = (
+        encoded_group_commitment ||
+        encoded_commitment)
+  return encoded_group_commitment
+</pre>
+
+The following function is used to extract identifiers from a commitment list.
+
+<pre>
+Inputs:
+- commitment_list = [(i, hiding_nonce_commitment_i,
+  binding_nonce_commitment_i), ...], a list of commitments issued by
+  each participant, where each element in the list indicates a
+  NonZeroScalar identifier i and two commitment Element values
+  (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+  MUST be sorted in ascending order by identifier.
+
+Outputs:
+- identifiers, a list of NonZeroScalar values.
+
+def participants_from_commitment_list(commitment_list):
+  identifiers = []
+  for (identifier, _, _) in commitment_list:
+    identifiers.append(identifier)
+  return identifiers
+</pre>
+
+The following function is used to extract a binding factor from a list of binding factors.
+
+<pre>
+Inputs:
+- binding_factor_list = [(i, binding_factor), ...],
+  a list of binding factors for each participant, where each element
+  in the list indicates a NonZeroScalar identifier i and Scalar
+  binding factor.
+- identifier, participant identifier, a NonZeroScalar.
+
+Outputs:
+- binding_factor, a Scalar.
+
+Errors:
+- "invalid participant", when the designated participant is
+  not known.
+
+def binding_factor_for_participant(binding_factor_list, identifier):
+  for (i, binding_factor) in binding_factor_list:
+    if identifier == i:
+      return binding_factor
+  raise "invalid participant"
+</pre>
+
+==== 4.4 Binding Factors Computation ====
+
+This section describes the subroutine for computing binding factors based on the participant commitment list, message to be signed, and group public key.
+
+<pre>
+Inputs:
+- group_public_key, the public key corresponding to the group signing
+  key, an Element.
+- commitment_list = [(i, hiding_nonce_commitment_i,
+  binding_nonce_commitment_i), ...], a list of commitments issued by
+  each participant, where each element in the list indicates a
+  NonZeroScalar identifier i and two commitment Element values
+  (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+  MUST be sorted in ascending order by identifier.
+- msg, the message to be signed.
+
+Outputs:
+- binding_factor_list, a list of (NonZeroScalar, Scalar) tuples
+  representing the binding factors.
+
+def compute_binding_factors(group_public_key, commitment_list, msg):
+  group_public_key_enc = G.SerializeElement(group_public_key)
+  // Hashed to a fixed length.
+  msg_hash = H4(msg)
+  // Hashed to a fixed length.
+  encoded_commitment_hash =
+      H5(encode_group_commitment_list(commitment_list))
+  // The encoding of the group public key is a fixed length
+  // within a ciphersuite.
+  rho_input_prefix = group_public_key_enc || msg_hash ||
+   encoded_commitment_hash
+
+  binding_factor_list = []
+  for (identifier, hiding_nonce_commitment,
+       binding_nonce_commitment) in commitment_list:
+    rho_input = rho_input_prefix || G.SerializeScalar(identifier)
+    binding_factor = H1(rho_input)
+    binding_factor_list.append((identifier, binding_factor))
+  return binding_factor_list
+</pre>
+
+==== 4.5 Group Commitment Computation ====
+
+This section describes the subroutine for creating the group commitment from a commitment list.
+
+<pre>
+Inputs:
+- commitment_list = [(i, hiding_nonce_commitment_i,
+  binding_nonce_commitment_i), ...], a list of commitments issued by
+  each participant, where each element in the list indicates a
+  NonZeroScalar identifier i and two commitment Element values
+  (hiding_nonce_commitment_i, binding_nonce_commitment_i). This list
+  MUST be sorted in ascending order by identifier.
+- binding_factor_list = [(i, binding_factor), ...],
+  a list of (NonZeroScalar, Scalar) tuples representing the binding
+  factor Scalar for the given identifier.
+
+Outputs:
+- group_commitment, an Element.
+
+def compute_group_commitment(commitment_list, binding_factor_list):
+  group_commitment = G.Identity()
+  for (identifier, hiding_nonce_commitment,
+       binding_nonce_commitment) in commitment_list:
+    binding_factor = binding_factor_for_participant(
+        binding_factor_list, identifier)
+    binding_nonce = G.ScalarMult(
+        binding_nonce_commitment,
+        binding_factor)
+    group_commitment = (
+        group_commitment +
+        hiding_nonce_commitment +
+        binding_nonce)
+  return group_commitment
+</pre>
+
+Note that the performance of this algorithm is defined naively and scales linearly relative to the number of signers. For improved performance, the group commitment can be computed using multi-exponentiation techniques such as Pippinger's algorithm; see [MultExp] for more details.
+
+==== 4.6 Signature Challenge Computation ====
+
+This section describes the subroutine for creating the per-message challenge.
+
+<pre>
+Inputs:
+- group_commitment, the group commitment, an Element.
+- group_public_key, the public key corresponding to the group signing
+  key, an Element.
+- msg, the message to be signed, a byte string.
+
+Outputs:
+- challenge, a Scalar.
+
+def compute_challenge(group_commitment, group_public_key, msg):
+  group_comm_enc = G.SerializeElement(group_commitment)
+  group_public_key_enc = G.SerializeElement(group_public_key)
+  challenge_input = group_comm_enc || group_public_key_enc || msg
+  challenge = H2(challenge_input)
+  return challenge
+</pre>
 
 == Backwards Compatibility ==
 
