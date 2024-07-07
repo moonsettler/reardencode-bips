@@ -119,6 +119,35 @@ H1, H2, and H3 map arbitrary byte strings to Scalar elements associated with the
 H4 and H5 are aliases for H with distinct domain separators.
 The details of H1, H2, H3, H4, and H5 vary based on the ciphersuite used. See Section 6 for more details about each.
 
+=== [4] Helper Functions ===
+
+Beyond the core dependencies, the protocol in this document depends on the following helper operations:
+
+Nonce generation (Section 4.1);
+Polynomials (Section 4.2);
+List operations (Section 4.3);
+Binding factors computation (Section 4.4);
+Group commitment computation (Section 4.5); and
+Signature challenge computation (Section 4.6).
+The following sections describe these operations in more detail.
+
+==== [4.1] Nonce Generation ====
+
+To hedge against a bad random number generator (RNG) that outputs predictable values, nonces are generated with the nonce_generate function by combining fresh randomness with the secret key as input to a domain-separated hash function built from the ciphersuite hash function H. This domain-separated hash function is denoted as H3. This function always samples 32 bytes of fresh randomness to ensure that the probability of nonce reuse is at most 2-128 as long as no more than 264 signatures are computed by a given signing participant.
+
+<div>
+* Inputs:
+** - secret, a Scalar.
+*
+* Outputs:
+** - nonce, a Scalar.
+*
+* def nonce_generate(secret):
+** random_bytes = random_bytes(32)
+** secret_enc = G.SerializeScalar(secret)
+** return H3(random_bytes || secret_enc)
+</div>
+
 == Backwards Compatibility ==
 
 This document proposes a standard for the FROST multi-signature scheme that is compatible with [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340].
