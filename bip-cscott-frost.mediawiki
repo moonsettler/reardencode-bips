@@ -15,12 +15,13 @@
 This document proposes a standard for the [https://eprint.iacr.org/2020/1261.pdf FROST] multi-signature scheme and [https://www.rfc-editor.org/rfc/rfc9591.html RFC9591] specification, with some modifications to the signature process in order to support [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340] public keys and signatures.
 
 These modifications include:
-* A specific domain for the BIP340 cryptography (secp256k1-bip340).
-* Replacing the challenge message to use the BIP340 challenge format.
-* Adopting the use of x-only public keys and nonces, plus the proper negation of those keys during signing.
-* Adopting the ''tweaking'' of the aggregate signature in order to derive [https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki BIP32] child keys and create [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki BIP341] Taproot outputs with key and script paths.
+* Specifying a domain for the BIP340 cryptography (secp256k1-bip340).
+* Modifying the FROST challenge message to use the BIP340 challenge format.
+* The use of x-only public keys, with the proper negation of those keys during signing.
+* The use of an x-only group public nonce, with the proper negation of this nonce during signing.
+* The '''tweaking''' of the aggregate signature, in order to derive [https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki BIP32] child keys and create [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki BIP341] Taproot outputs with key and script paths.
 
-The standards for these modifications can be borrowed from [https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki BIP327], as both Musig2 and FROST follow a similar scheme for signing and aggregation.
+The standard for these modifications can be derived from [https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki BIP327], as both Musig2 and FROST follow a similar scheme for signing and aggregation.
 
 === Copyright ===
 
