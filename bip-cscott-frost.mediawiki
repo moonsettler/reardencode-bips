@@ -15,6 +15,7 @@
 This document proposes a standard for the [https://eprint.iacr.org/2020/852.pdf FROST] multi-signature scheme and [https://www.rfc-editor.org/rfc/rfc9591.html RFC-9591] specification, with some modifications to the signature process in order to support [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340] public keys and signatures.
 
 These modifications include:
+
 * Specifying a domain for the BIP340 cryptography (secp256k1-bip340).
 * Modifying the FROST challenge message to use the BIP340 challenge format.
 * The use of x-only public keys, and possible negation for these keys during signing.
@@ -29,9 +30,94 @@ This document is licensed under the 3-clause BSD license.
 
 === Motivation ===
 
-FROST is a schnorr-based, k-of-n multi-signature scheme. This scheme allows multiple signers to create a single aggregate public key, and cooperatively create a schnorr signature which is valid under the aggregate public key. This signature can be constructed using k-of-n participants, with k being the minimum number of n participants required to cooperate in order to produce a valid schnorr signature.
+FROST is a t-of-n threshold schnorr multi-signature scheme. This scheme allows multiple signers to create a single aggregate public key, and create a schnorr signature which is valid under the aggregate public key. This signature can be constructed using t-of-n participants, with t being the minimum number of n participants required to cooperate in order to produce a valid schnorr signature.
 
-=== Specification ===
+The primary motivation of FROST is to create a standard for cooperatively constructing this multi-signature, with minimal network overhead during signing operations, and protection against known forgery attacks.
+
+The FROST protocol has since undergone multiple reviews and audits, received a final RFC specification, and has several production implementations available.
+
+The benefit of using FROST mirrors that of Musig2, in that the on-chain footprint of spending a FROST Taproot output is indistinguishable from a BIP340 Taproot key output. In addition, FROST allows users to use a t-of-n threshold signature scheme, as opposed to an n-of-n multi-signature scheme with Musig2.
+
+Another benefit of using FROST, is that t-of-n participants can collaborate on recomputing the ''shares'' of the aggregate public key, while retaining the same public key. This allows for the addition, removal, and replacement of participants, plus changes to the threshold, without having to update the aggregate public key or its Taproot output on-chain.
+
+The specification for updating shares of an aggregate public key is outside the scope of this document.
+
+It should be noted that a key disadvantage with using FROST is that participants cannot provide their own public key when constructing the aggregate public key. This is because the process for generating ''shares'' of the group secret will determine the public key used by each participant.
+
+== Specification ==
+
+=== [1] RFC Introduction ===
+
+This specification is based on the RFC-9591 specification, with some modifications provided by the BIP-327 specification. Any notable changes to the RFC-9591 specification will be highlighted.
+
+The original RFC document specifies the Flexible Round-Optimized Schnorr Threshold (FROST) signing protocol based on original work in [FROST20]. FROST requires two rounds to compute a signature. Key generation for FROST signing is out of scope for this document.
+
+=== [2] Conventions and Definitions ===
+
+The following notation is used throughout the document.
+
+'''byte:''' A sequence of eight bits.
+
+'''random_bytes(n):''' Outputs n bytes, sampled uniformly at random using a cryptographically secure pseudorandom number generator (CSPRNG).
+
+'''count(i, L):''' Outputs the number of times the element i is represented in the list L.
+
+'''len(l):''' Outputs the length of list l, e.g., len([1,2,3]) = 3.
+
+'''reverse(l):'''  Outputs the list l in reverse order, e.g., reverse([1,2,3]) = [3,2,1].
+
+'''range(a, b):''' Outputs a list of integers from a to b-1 in ascending order, e.g., range(1, 4) = [1,2,3].
+
+'''pow(a, b):'''  Outputs the result, a Scalar, of a to the power of b, e.g., pow(2, 3) = 8 modulo the relevant group order p.
+
+'''||:''' Denotes concatenation of byte strings, i.e., x || y denotes the byte string x, immediately followed by the byte string y, with no extra separator, yielding xy.
+
+'''nil:''' Denotes an empty byte string.
+
+Unless otherwise stated, we assume that secrets are sampled uniformly at random using a CSPRNG; see [RFC4086] for additional guidance on the generation of random numbers.
+
+=== [3] Cryptographic Dependencies ===
+
+FROST signing depends on the following cryptographic constructs:
+
+* Prime-order group (Section 3.1)
+
+* Cryptographic hash function (Section 3.2)
+
+==== [3.1] Prime-Order Group ====
+
+FROST depends on an abelian group of prime order p. We represent this group as the object G that additionally defines helper functions described below. The group operation for G is addition + with identity element I. For any elements A and B of the group G, A + B = B + A is also a member of G. Also, for any A in G, there exists an element -A such that A + (-A) = (-A) + A = I. For convenience, we use - to denote subtraction, e.g., A - B = A + (-B). Integers, taken modulo the group order p, are called "Scalars"; arithmetic operations on Scalars are implicitly performed modulo p. Since p is prime, Scalars form a finite field. Scalar multiplication is equivalent to the repeated application of the group operation on an element A with itself r-1 times, denoted as ScalarMult(A, r). We denote the sum, difference, and product of two Scalars using the +, -, and * operators, respectively. (Note that this means + may refer to group element addition or Scalar addition, depending on the type of the operands.) For any element A, ScalarMult(A, p) = I. We denote B as a fixed generator of the group. Scalar base multiplication is equivalent to the repeated application of the group operation on B with itself r-1 times, denoted as ScalarBaseMult(r). The set of Scalars corresponds to GF(p), which we refer to as the Scalar field. It is assumed that group element addition, negation, and equality comparison can be efficiently computed for arbitrary group elements.
+
+This document uses types Element and Scalar to denote elements of the group G and its set of Scalars, respectively. We denote Scalar(x) as the conversion of integer input x to the corresponding Scalar value with the same numeric value. For example, Scalar(1) yields a Scalar representing the value 1. Moreover, we use the type NonZeroScalar to denote a Scalar value that is not equal to zero, i.e., Scalar(0). We denote equality comparison of these types as == and assignment of values by =. When comparing Scalar values, e.g., for the purposes of sorting lists of Scalar values, the least nonnegative representation mod p is used.
+
+We now detail a number of member functions that can be invoked on G.
+
+Order():
+Outputs the order of G (i.e., p).
+Identity():
+Outputs the identity Element of the group (i.e., I).
+RandomScalar():
+Outputs a random Scalar element in GF(p), i.e., a random Scalar in [0, p - 1].
+ScalarMult(A, k):
+Outputs the Scalar multiplication between Element A and Scalar k.
+ScalarBaseMult(k):
+Outputs the Scalar multiplication between Scalar k and the group generator B.
+SerializeElement(A):
+Maps an Element A to a canonical byte array buf of fixed length Ne. This function raises an error if A is the identity element of the group.
+DeserializeElement(buf):
+Attempts to map a byte array buf to an Element A and fails if the input is not the valid canonical byte representation of an element of the group. This function raises an error if deserialization fails or if A is the identity element of the group; see Section 6 for group-specific input validation steps.
+SerializeScalar(s):
+Maps a Scalar s to a canonical byte array buf of fixed length Ns.
+DeserializeScalar(buf):
+Attempts to map a byte array buf to a Scalar s. This function raises an error if deserialization fails; see Section 6 for group-specific input validation steps.
+
+==== [3.2] Cryptographic Hash Function ====
+
+FROST requires the use of a cryptographically secure hash function, generically written as H, which is modeled as a random oracle in security proofs for the protocol (see [FROST20] and [StrongerSec22]). For concrete recommendations on hash functions that SHOULD be used in practice, see Section 6. Using H, we introduce distinct domain-separated hashes H1, H2, H3, H4, and H5:
+
+H1, H2, and H3 map arbitrary byte strings to Scalar elements associated with the prime-order group.
+H4 and H5 are aliases for H with distinct domain separators.
+The details of H1, H2, H3, H4, and H5 vary based on the ciphersuite used. See Section 6 for more details about each.
 
 == Backwards Compatibility ==
 
