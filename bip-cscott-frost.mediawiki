@@ -12,7 +12,7 @@
 
 === Abstract ===
 
-This document proposes a standard for the [https://eprint.iacr.org/2020/1261.pdf FROST] multi-signature scheme and [https://www.rfc-editor.org/rfc/rfc9591.html RFC9591] specification, with some modifications to the signature process in order to support [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340] public keys and signatures.
+This document proposes a standard for the [https://eprint.iacr.org/2020/852.pdf FROST] multi-signature scheme and [https://www.rfc-editor.org/rfc/rfc9591.html RFC-9591] specification, with some modifications to the signature process in order to support [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340] public keys and signatures.
 
 These modifications include:
 * Specifying a domain for the BIP340 cryptography (secp256k1-bip340).
