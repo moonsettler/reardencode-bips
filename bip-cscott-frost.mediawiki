@@ -1,7 +1,8 @@
 <pre>
   BIP: N/A
   Title: FROST for BIP340-compatible Multi-Signatures
-  Author: Christopher Scott <cscottdev@protonmail.com>
+  Authors:
+    Christopher Scott <cscottdev@protonmail.com>
   Status: Draft
   License: BSD-3-Clause
   Type: Informational
