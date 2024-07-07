@@ -1,0 +1,44 @@
+<pre>
+  BIP: N/A
+  Title: Taproot FROST
+  Author: Christopher Scott <cscottdev@protonmail.com>
+  Status: Draft
+  License: BSD-3-Clause
+  Type: Informational
+  Created: 2024-07-07
+</pre>
+
+== Introduction ==
+
+== Abstract ==
+
+This document proposes a standard for the [https://eprint.iacr.org/2020/1261.pdf FROST] multi-signature scheme and [https://www.rfc-editor.org/rfc/rfc9591.html RFC9591] specification, with some modifications to the signature process in order to support [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340] public keys and signatures.
+
+These modifications include:
+  - A specific domain for the BIP340 crytpography (secp256k1-bip340).
+  - Replacing the challenge message to use the BIP340 challenge format.
+  - Adopting the use of x-only public keys and nonces, plus the proper negation of those keys during signing.
+  - Adopting the ''tweaking'' of the aggregate signature in order to derive [https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki BIP32] child keys and create [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki BIP341] Taproot outputs with key and script paths.
+
+The standards for these modifications can be borrowed from [https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki BIP327] Musig2, as both Musig2 and FROST follow a similar scheme for signing and aggregation.
+
+== Copyright ==
+
+This document is licensed under the 3-clause BSD license.
+
+== Motivation ==
+
+FROST is a schnorr-based, k-of-n multi-signature scheme. This scheme allows multiple signers to create a single aggregate public key, and cooperatively create a schnorr signature which is valid under the aggregate public key. This signature can be constructed using k-of-n participants, with k being the minimum number of n participants required to cooperate in order to produce a valid schnorr signature.
+
+== Specification ==
+
+== Rationale ==
+
+== Backwards Compatibility ==
+
+This document proposes a standard for the FROST multi-signature scheme that is compatible with [https://github.com/bitcoin/bips/blob/master/bip-0340.mediawiki BIP340].
+
+FROST is ''not'' compatible with ECDSA signatures traditionally used in Bitcoin.
+
+== Change Log ==
+
