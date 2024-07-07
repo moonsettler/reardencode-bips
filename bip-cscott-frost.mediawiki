@@ -17,8 +17,8 @@ This document proposes a standard for the [https://eprint.iacr.org/2020/1261.pdf
 These modifications include:
 * Specifying a domain for the BIP340 cryptography (secp256k1-bip340).
 * Modifying the FROST challenge message to use the BIP340 challenge format.
-* The use of x-only public keys, with the proper negation of those keys during signing.
-* The use of an x-only group public nonce, with the proper negation of this nonce during signing.
+* The use of x-only public keys, and possible negation for these keys during signing.
+* The use of an x-only group public nonce, and possible negation for this nonce during signing.
 * The '''tweaking''' of the aggregate signature, in order to derive [https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki BIP32] child keys and create [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki BIP341] Taproot outputs with key and script paths.
 
 The standard for these modifications can be derived from [https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki BIP327], as both Musig2 and FROST follow a similar scheme for signing and aggregation.
