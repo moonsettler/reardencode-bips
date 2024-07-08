@@ -31,7 +31,7 @@ This document is licensed under the 3-clause BSD license.
 
 === Motivation ===
 
-FROST is a t-of-n threshold schnorr multi-signature scheme. This scheme allows multiple signers to create a single aggregate public key, and create a schnorr signature which is valid under the aggregate public key. This signature can be constructed using t-of-n participants, with t being the minimum number of n participants required to cooperate in order to produce a valid schnorr signature.
+FROST is a t-of-n threshold schnorr multi-signature scheme. This scheme allows multiple signers to create a single aggregate public key, then create a schnorr signature which is valid under the aggregate public key. This signature can be constructed using t-of-n participants, with t being the minimum number of n participants required to cooperate in order to produce a valid schnorr signature.
 
 The primary motivation of FROST is to create a standard for cooperatively constructing this multi-signature, with minimal network overhead during signing operations, and protection against known forgery attacks.
 
@@ -43,7 +43,7 @@ Another benefit of using FROST, is that t-of-n participants can collaborate on r
 
 The specification for updating shares of an aggregate public key is outside the scope of this document.
 
-It should be noted that a key disadvantage with using FROST is that participants cannot provide their own public key when constructing the aggregate public key. This is because the process for generating ''shares'' of the group secret will determine the public key used by each participant.
+It should be noted that a key disadvantage with using FROST versus Musig2 is that participants cannot provide their own public key when constructing the aggregate public key. This is because the process for generating ''shares'' of the group secret will determine the public key used by each participant.
 
 == Specification ==
 
@@ -729,6 +729,17 @@ This document proposes a standard for the FROST multi-signature scheme that is c
 FROST is ''not'' compatible with ECDSA signatures traditionally used in Bitcoin.
 
 == Footnotes ==
+
+== References ==
+
+FROST: Flexible Round-Optimized Schnorr Threshold Signatures
+https://eprint.iacr.org/2020/852.pdf
+
+RFC-9591: The Flexible Round-Optimized Schnorr Threshold (FROST) Protocol for Two‑Round Schnorr Signatures.
+https://www.rfc-editor.org/rfc/rfc9591
+
+BIP-327: MuSig2 for BIP340-compatible Multi-Signatures
+https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki 
 
 
 == Acknowledgements ==
