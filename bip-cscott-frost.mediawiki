@@ -21,9 +21,9 @@ These modifications include:
 * Modifying the FROST challenge message to use the BIP340 challenge format.
 * The use of x-only public keys, and possible negation for these keys during signing.
 * The use of an x-only group public nonce, and possible negation for this nonce during signing.
-* The ''tweaking'' of the aggregate signature, in order to derive [https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki BIP32] child keys and create [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki BIP341] Taproot outputs with key and script paths.
+* The ''tweaking'' of the aggregate signature, in order to create signatures for [https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki BIP32] child keys and create key path signatures for [https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki BIP341] Taproot outputs with script paths.
 
-The standard for these modifications can be copied from [https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki BIP327], as Musig2 and FROST follow a similar scheme for signing and aggregation.
+Much of the standard for these modifications can be copied from [https://github.com/bitcoin/bips/blob/master/bip-0327.mediawiki BIP327], as MuSig2 and FROST follow a similar scheme for signing and aggregation.
 
 === Copyright ===
 
@@ -31,19 +31,19 @@ This document is licensed under the 3-clause BSD license.
 
 === Motivation ===
 
-FROST is a t-of-n threshold schnorr multi-signature scheme. This scheme allows multiple signers to create a single aggregate public key, then create a schnorr signature which is valid under the aggregate public key. This signature can be constructed using t-of-n participants, with t being the minimum number of n participants required to cooperate in order to produce a valid schnorr signature.
+FROST is a t-of-n threshold Schnorr signature scheme. This scheme allows multiple signers with Shamir shares of a single aggregate public key, then create a Schnorr signature which is valid under the aggregate public key. This signature can be constructed using t-of-n participants, with t being the minimum number of n participants required to cooperate in order to produce a valid Schnorr signature.
 
 The primary motivation of FROST is to create a standard for cooperatively constructing this multi-signature, with minimal network overhead during signing operations, and protection against known forgery attacks.
 
-The FROST protocol has since undergone multiple reviews and audits, received a final RFC specification, and has several production implementations available.
+The FROST protocol has undergone multiple reviews and audits, received a final RFC specification, and has several production implementations available.
 
-The benefit of using FROST mirrors that of Musig2, in that the on-chain footprint of spending a FROST Taproot output is indistinguishable from a BIP340 Taproot key output. In addition, FROST allows users to use a t-of-n threshold signature scheme, as opposed to an n-of-n multi-signature scheme with Musig2.
+The benefit of using FROST mirrors that of MuSig2, in that the on-chain footprint of spending a FROST Taproot output is indistinguishable from a BIP340 Taproot key spend. In addition, FROST allows users to use a t-of-n threshold signing quorum, as opposed to an n-of-n multi-signature quorum with MuSig2.
 
-Another benefit of using FROST, is that t-of-n participants can collaborate on recomputing the ''shares'' of the aggregate public key, while retaining the same public key. This allows for the addition, removal, and replacement of participants, plus changes to the threshold, without having to update the aggregate public key or its Taproot output on-chain.
+Another benefit of using FROST being a Shamir based scheme, is that t-of-n participants can collaborate on recomputing the ''shares'' of the aggregate public key, while retaining the same public key. This allows for the addition, removal, and replacement of participants, plus changes to the threshold, without having to update the aggregate public key or its Taproot output on-chain.
 
-The specification for updating shares of an aggregate public key is outside the scope of this document.
+The specifications for creating and updating shares of an aggregate public key are outside the scope of this document.
 
-It should be noted that a key disadvantage with using FROST versus Musig2 is that participants cannot provide their own public key when constructing the aggregate public key. This is because the process for generating ''shares'' of the group secret will determine the public key used by each participant.
+It should be noted that a key disadvantage with using FROST versus MuSig2 is that participants cannot provide their own public key when constructing the aggregate public key (and correspondingly, key aggregation cannot be done offline). This is because the process for generating ''shares'' of the group secret will determine the public key used by each participant.
 
 == Specification ==
 
