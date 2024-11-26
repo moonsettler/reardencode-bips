@@ -21,7 +21,7 @@ When verifying taproot script spends having leaf version 0xc0 (as defined in
 [BIP 342]), we propose `OP_CHECKSIGFROMSTACK` to replace `OP_SUCCESS204`
 (0xcc).
 
-`OP_CHECKSIGFROMSTACKVERIFY` has semantics similar to `OP_CHECKSIG`, as
+`OP_CHECKSIGFROMSTACK` has semantics similar to `OP_CHECKSIG`, as
 specified below.
 
 Only 32-byte keys are constrained. Similar to [BIP 341] unknown key types, for
@@ -46,7 +46,7 @@ other key lengths no signature verification is performed.
 
 1. Message hashing: [BIP 340] is compatible with any size of message and does not require it to be a securely hashed input, so the message is not hashed prior to [BIP 340] verification.
 2. Lack of verify semantics: Adding a single opcode for this purpose keeps the implementation and design simple. An earlier draft had a verify variant as a NOP upgrade, and if this funcationality is later brought to legacy scripts, that would be a good time to add a verify variant.
-3. Add/multisig: No concession is made to `OP_CHECKMULTISIG` or `OP_CHECKSIGADD` semantics with `OP_CHECKSIGFROMSTACK(VERIFY)`. In Tapscript, add semantics can be implemented with 1 additional vByte per key (`OP_TOALTSTACK OP_CHECKSIGFROMSTACK OP_FROMALTSTACK OP_ADD`).
+3. Add/multisig: No concession is made to `OP_CHECKMULTISIG` or `OP_CHECKSIGADD` semantics with `OP_CHECKSIGFROMSTACK`. In Tapscript, add semantics can be implemented with 1 additional vByte per key (`OP_TOALTSTACK OP_CHECKSIGFROMSTACK OP_FROMALTSTACK OP_ADD`).
 4. Splitting R/S on the stack: Implementing split/separate signatures is left as an exercise for other bitcoin upgrades, such as `[BIP 347]`.
 5. [BIP 118]-style Taproot internal key: Rather than introducing an additional key type in this change, we suggest implementing [BIP 349] or separately introducing that key type for all Tapscript signature checking operations in a separate change.
 
